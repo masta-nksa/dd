@@ -2,8 +2,10 @@ class_name InputSetup
 ## Legt die Eingabe-Aktionen im Code an (Tastatur). Controller folgt in einer späteren Stufe.
 
 const BELEGUNG := {
-	1: {"left": KEY_A, "right": KEY_D, "up": KEY_W, "down": KEY_S, "jump": KEY_SPACE},
-	2: {"left": KEY_LEFT, "right": KEY_RIGHT, "up": KEY_UP, "down": KEY_DOWN, "jump": KEY_O},
+	1: {"left": KEY_A, "right": KEY_D, "up": KEY_W, "down": KEY_S, "jump": KEY_SPACE,
+		"punch": KEY_F, "kick": KEY_G, "special": KEY_R},
+	2: {"left": KEY_LEFT, "right": KEY_RIGHT, "up": KEY_UP, "down": KEY_DOWN, "jump": KEY_O,
+		"punch": KEY_K, "kick": KEY_L, "special": KEY_I},
 }
 
 static func einrichten() -> void:
