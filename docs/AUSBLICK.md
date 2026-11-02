@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02. Stufen 1–6 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe6_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
-Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Web-Export noch nicht lokal getestet (Export-Templates fehlen).
+Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
 
 ## Stufe 3 (Kampf) – Aufbau
@@ -52,7 +52,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - `SaveData`: Rekord als Gesamtpunktzahl, getrennt nach 1 und 2 Spielern, dazu Musik an/aus, in `user://doppelfaust.cfg`.
 - `SoundBank`: 14 Geräusche und eine Musikschleife (4 Takte, 8 s) im Code berechnet, Port von `ton.py`; `SoundBank.play(id)` bleibt ohne `App` still. M schaltet die Musik.
 - Controller: erster Controller = Spieler 1, zweiter = Spieler 2. A Sprung, X/LB Schlag, B Tritt, Y Spezial, RB Greifen, Stick/Kreuz bewegen. Der Greifen-Hinweis im HUD zeigt dann «RB».
-- Tests: 44 Prüfungen in `stufe6_test.gd`. Von Hand zu prüfen: Klang der Töne, echtes Gamepad, Speichern und Ton im Browser. Nicht portiert: Rumble, Einsteigen mitten im Spiel.
+- Tests: 44 Prüfungen in `stufe6_test.gd`. Im Browser geprüft: Start, Menü, Spielstart, Pause, Speichern über einen Neuladen. Von Hand zu prüfen: Klang der Töne, echtes Gamepad. Nicht portiert: Rumble, Einsteigen mitten im Spiel.
 - Die Warnung «ObjectDB instances leaked» am Ende von `stufe6_test.gd` kommt von Tonobjekten, die beim sofortigen Beenden noch spielen.
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
