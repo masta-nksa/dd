@@ -9,12 +9,14 @@ var hit_targets: Array[Fighter] = []
 func world_box() -> AABB:
 	var f := get_parent() as Fighter
 	var a := attack
-	var w := a.box_size
+	var k := f.body_scale
+	var w := Vector3(a.box_size.x * k, a.box_size.y * k, a.box_size.z)
+	var reach := a.reach * k
 	var x_min: float
 	if a.both_sides:
 		x_min = f.pos_x - w.x * 0.5
 	elif f.facing > 0:
-		x_min = f.pos_x + a.reach - w.x
+		x_min = f.pos_x + reach - w.x
 	else:
-		x_min = f.pos_x - a.reach
-	return AABB(Vector3(x_min, f.pos_y + a.box_y, f.pos_z - w.z * 0.5), w)
+		x_min = f.pos_x - reach
+	return AABB(Vector3(x_min, f.pos_y + a.box_y * k, f.pos_z - w.z * 0.5), w)

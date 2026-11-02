@@ -15,6 +15,7 @@ func frames(n: int) -> void:
 		await physics_frame
 
 func _init() -> void:
+	Main.waves_enabled = false
 	var szene: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(szene)
 	await frames(2)

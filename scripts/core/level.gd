@@ -2,7 +2,7 @@ class_name Level
 extends Node2D
 ## Einfacher Hintergrund: Himmel, Skyline, Strasse mit Spurlinien.
 
-const WIDTH := 3000.0
+const WIDTH := 5400.0
 const HEIGHT := 540.0
 const STREET_TOP := 290.0
 
@@ -10,7 +10,7 @@ func _ready() -> void:
 	z_index = -4000
 
 func lane_bounds() -> Rect2:
-	return Rect2(40.0, 320.0, WIDTH - 80.0, 170.0)
+	return Rect2(40.0, 322.0, WIDTH - 80.0, 200.0)
 
 func _draw() -> void:
 	draw_rect(Rect2(0, 0, WIDTH, STREET_TOP), Color(0.55, 0.7, 0.9))

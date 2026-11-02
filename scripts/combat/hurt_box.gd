@@ -10,4 +10,5 @@ func is_enabled() -> bool:
 
 func world_box() -> AABB:
 	var f := get_parent() as Fighter
-	return AABB(Vector3(f.pos_x - size.x * 0.5, f.pos_y, f.pos_z - size.z * 0.5), size)
+	var sz := Vector3(size.x * f.body_scale, size.y * f.body_scale, size.z)
+	return AABB(Vector3(f.pos_x - sz.x * 0.5, f.pos_y, f.pos_z - sz.z * 0.5), sz)

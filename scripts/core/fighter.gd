@@ -17,6 +17,8 @@ static var debug_boxes := false
 @export var speed_z := 115.0
 @export var jump_speed := 620.0
 @export var gravity := 1800.0
+@export var body_scale := 1.0
+@export var weight := 1.0     # Rückstoss wird durch das Gewicht geteilt
 
 const FRICTION := 700.0
 const REQUEST_WINDOW := 0.25
@@ -39,6 +41,9 @@ var hurt_box: HurtBox
 var hit_box: HitBox
 var attack: AttackData = null
 var attack_time := 0.0
+var score := 0
+var last_attacker: Fighter = null
+var lock_facing := false   # Blickrichtung setzt der Controller selbst (Gegner)
 
 var _jump_requested := false
 var _request: StringName = &""
@@ -122,7 +127,7 @@ func _move(delta: float, scale := 1.0) -> void:
 	pos_z += move_input.y * speed_z * scale * delta
 	pos_x = clampf(pos_x, bounds.position.x, bounds.end.x)
 	pos_z = clampf(pos_z, bounds.position.y, bounds.end.y)
-	if absf(move_input.x) > 0.1:
+	if not lock_facing and absf(move_input.x) > 0.1:
 		facing = 1 if move_input.x > 0.0 else -1
 
 func _slide(delta: float) -> void:
@@ -199,7 +204,10 @@ func _tick_attack(delta: float) -> void:
 	else:
 		_slide(delta)
 	# Combo: Anfrage während der Erholung startet den nächsten Schlag der Kette
-	if attack_time >= a.startup + a.active and _request == &"punch" and a.chain_to != &"":
+	if a.drive > 0.0 and hit_box.active:
+		vel_x = facing * a.drive
+	if attack_time >= a.startup + a.active and _request == &"punch" and a.chain_to != &"" \
+			and (not a.chain_needs_hit or not hit_box.hit_targets.is_empty()):
 		start_attack(a.chain_to)
 		return
 	if attack_time >= a.total_time():
@@ -247,12 +255,13 @@ func take_hit(a: AttackData, from: Fighter) -> bool:
 	_freeze_time = HITSTOP
 	from._freeze_time = HITSTOP
 	_flash_time = 0.12
-	vel_x = dir * a.knockback
+	last_attacker = from
+	vel_x = dir * a.knockback / weight
 	if current_health <= 0 or a.knockdown or pos_y > 0.0:
 		_landed = false
 		velocity_y = maxf(velocity_y, 320.0)
 		pos_y = maxf(pos_y, 0.01)
-		vel_x = dir * maxf(a.knockback, 180.0)
+		vel_x = dir * maxf(a.knockback, 180.0) / weight
 		_set_state(State.KNOCKDOWN)
 		if current_health <= 0:
 			died.emit()
@@ -268,7 +277,8 @@ func _apply_position() -> void:
 	z_index = int(pos_z)
 
 func _draw() -> void:
-	var s := clampf(1.0 - pos_y / 400.0, 0.4, 1.0)
+	var k := body_scale
+	var s := clampf(1.0 - pos_y / 400.0, 0.4, 1.0) * k
 	var pts := PackedVector2Array()
 	for i in 20:
 		var ang := TAU * i / 20.0
@@ -280,18 +290,20 @@ func _draw() -> void:
 		self_modulate = Color(1, 1, 1, 0.4)
 
 	var f := float(facing)
-	var lying := state == State.KNOCKDOWN or state == State.DEAD or state == State.GETUP
-	if lying:
-		var angle := -f * PI * 0.5
+	var offset := Vector2.ZERO
+	var angle := 0.0
+	if state == State.KNOCKDOWN or state == State.DEAD or state == State.GETUP:
+		angle = -f * PI * 0.5
+		offset = Vector2(0, -6 * k)
 		if state == State.KNOCKDOWN and not _landed:
 			angle = -f * PI * 0.3
 		elif state == State.GETUP:
 			angle = -f * PI * 0.5 * (1.0 - _state_time / GETUP_TIME)
-		draw_set_transform(Vector2(0, -6), angle)
 	elif state == State.HIT:
-		draw_set_transform(Vector2.ZERO, -f * 0.18)
+		angle = -f * 0.18
+	draw_set_transform(offset, angle, Vector2(k, k))
 	_draw_figure(f)
-	draw_set_transform(Vector2.ZERO, 0.0)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_health_bar()
 	if debug_boxes:
 		_draw_debug()
@@ -320,8 +332,11 @@ func _draw_figure(f: float) -> void:
 	draw_rect(Rect2(-13, -72 + bob, 26, 40), body_color)
 	draw_rect(Rect2(-13, -38 + bob, 26, 4), body_color.darkened(0.6))
 	# Arme
+	var winding_up := pose == &"punch" and phase == 0.0 and attack.startup >= 0.15
 	var punch_arm := pose == &"punch" and phase == 1.0
-	if punch_arm:
+	if winding_up:
+		draw_rect(Rect2(f * 10 - 4, -96, 8, 30), skin)
+	elif punch_arm:
 		var length := 44.0
 		draw_rect(Rect2(f * 10 - (0 if f > 0 else length), -68, length, 9), skin)
 	else:
@@ -340,7 +355,7 @@ func _draw_health_bar() -> void:
 		return
 	var w := 44.0
 	var ratio := float(current_health) / float(max_health)
-	var top := -112.0
+	var top := -112.0 * body_scale
 	draw_rect(Rect2(-w * 0.5, top, w, 5), Color(0, 0, 0, 0.6))
 	draw_rect(Rect2(-w * 0.5, top, w * ratio, 5), Color(0.3, 0.9, 0.3).lerp(Color(0.95, 0.2, 0.2), 1.0 - ratio))
 

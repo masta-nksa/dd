@@ -17,6 +17,8 @@ var lunge := 0.0           # Schritt nach vorn beim Start
 var both_sides := false    # Hitbox vor und hinter dem Fighter
 var health_cost := 0       # Lebenspunkte, die der Angriff kostet
 var chain_to: StringName = &""   # nächster Schlag der Kette
+var drive := 0.0           # hält während des aktiven Teils diese Vorwärtsgeschwindigkeit (Rammen)
+var chain_needs_hit := false   # Kette läuft nur weiter, wenn der Schlag getroffen hat
 var pose: StringName = &"punch"  # Darstellung: punch, kick, spin
 
 func total_time() -> float:

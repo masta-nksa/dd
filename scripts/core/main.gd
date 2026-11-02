@@ -1,11 +1,19 @@
+class_name Main
 extends Node2D
-## Startpunkt von Doppelfaust. Stufe 3: Level, zwei Kämpfer, Kampfsystem, Trainingspuppe, HUD.
+## Startpunkt von Doppelfaust. Stufe 4: Level, zwei Kämpfer, Kampfsystem, Gegner mit Wellen, HUD.
+
+static var waves_enabled := true       # Tests schalten die Wellen ab
+static var training_dummy := false     # Trainingspuppe wie in Stufe 3
+static var two_players := true
 
 var level: Level
 var fighters: Array[Fighter] = []   # Spieler
-var dummy: Fighter                  # Trainingspuppe (wird in Stufe 4 durch Gegner ersetzt)
+var dummy: Fighter = null
 var camera_rig: CameraRig
 var combat: CombatSystem
+var director: WaveDirector
+var hud: Hud
+var game_over := false
 
 func _ready() -> void:
 	InputSetup.einrichten()
@@ -13,7 +21,7 @@ func _ready() -> void:
 	add_child(level)
 
 	var farben := [Color(0.2, 0.45, 0.9), Color(0.9, 0.25, 0.25)]
-	for i in 2:
+	for i in (2 if two_players else 1):
 		var fighter := Fighter.new()
 		fighter.body_color = farben[i]
 		fighter.team = 0
@@ -25,28 +33,54 @@ func _ready() -> void:
 		ctrl.fighter = fighter
 		add_child(ctrl)
 
-	dummy = Fighter.new()
-	dummy.body_color = Color(0.85, 0.6, 0.15)
-	dummy.team = 1
-	add_child(dummy)
-	dummy.setup(520.0, 410.0, level.lane_bounds())
-	dummy.facing = -1
-	dummy.died.connect(_on_dummy_died)
+	if training_dummy:
+		dummy = Fighter.new()
+		dummy.body_color = Color(0.85, 0.6, 0.15)
+		dummy.team = 1
+		add_child(dummy)
+		dummy.setup(520.0, 410.0, level.lane_bounds())
+		dummy.facing = -1
+		dummy.died.connect(_on_dummy_died)
 
 	combat = CombatSystem.new()
-	combat.fighters = [fighters[0], fighters[1], dummy]
-	add_child(combat)   # nach den Fightern: läuft nach deren Aktualisierung
+	for f in fighters:
+		combat.fighters.append(f)
+	if dummy != null:
+		combat.fighters.append(dummy)
+	add_child(combat)
 
 	camera_rig = CameraRig.new()
 	camera_rig.targets = fighters
+	camera_rig.keep_players_on_screen = waves_enabled
 	add_child(camera_rig)
 	camera_rig.position = Vector2(480.0, Level.HEIGHT * 0.5)
 
 	var layer := CanvasLayer.new()
-	var hud := Hud.new()
+	hud = Hud.new()
 	hud.players = fighters
 	layer.add_child(hud)
 	add_child(layer)
+
+	director = WaveDirector.new()
+	director.players = fighters
+	director.camera = camera_rig
+	director.combat = combat
+	director.level = level
+	director.two_players = fighters.size() > 1
+	director.finished = not waves_enabled
+	director.banner.connect(hud.show_banner)
+	director.go_hint.connect(hud.show_go)
+	director.all_waves_done.connect(func(): hud.message = "GESCHAFFT!")
+	add_child(director)
+
+func _physics_process(_delta: float) -> void:
+	if game_over or not waves_enabled:
+		return
+	for f in fighters:
+		if f.current_health > 0:
+			return
+	game_over = true
+	hud.message = "GAME OVER"
 
 func _on_dummy_died() -> void:
 	await get_tree().create_timer(2.5).timeout
