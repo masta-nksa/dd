@@ -12,6 +12,7 @@ var kind: StringName = &"apple"
 
 func collect(f: Fighter) -> void:
 	var d: Dictionary = KINDS[kind]
+	SoundBank.play(&"collect")
 	if d["heal"] > 0:
 		f.current_health = mini(f.max_health, f.current_health + d["heal"])
 		items.effects.text(pos_x, pos_z, 70.0, "+%d HP" % d["heal"], Color(0.4, 1.0, 0.4))

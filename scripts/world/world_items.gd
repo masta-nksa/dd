@@ -99,6 +99,7 @@ func break_prop(prop: Prop, smashed: bool, at_x := NAN, at_z := NAN, at_y := NAN
 	var z := prop.pos_z if is_nan(at_z) else at_z
 	var y := prop.height * 0.5 if is_nan(at_y) else at_y + prop.height * 0.5
 	effects.debris(x, z, y, prop.debris_colors(), 16)
+	SoundBank.play(&"smash")
 	forget(prop)
 	prop.queue_free()
 	if smashed:
@@ -144,6 +145,7 @@ func find_grabbable(f: Fighter) -> Node2D:
 func take(f: Fighter, target: Node2D) -> void:
 	if target == null or not is_instance_valid(target):
 		return
+	SoundBank.play(&"grab")
 	if f.carried != null:
 		f.lay_down(false)   # Tauschen: die alte Waffe fällt vor die Füsse
 	if target is WeaponPickup:

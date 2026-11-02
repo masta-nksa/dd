@@ -19,7 +19,7 @@ func show_go() -> void:
 	go_time = 3.0
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _process(delta: float) -> void:
@@ -70,7 +70,7 @@ func _draw_grab_hint(f: Fighter, player_number: int) -> void:
 		top = (target as Prop).height
 	var sx: float = target.pos_x - camera.position.x + size.x * 0.5
 	var sy: float = target.pos_z - top - 26.0 - 3.0 * sin(Time.get_ticks_msec() / 160.0)
-	var key := OS.get_keycode_string(InputSetup.BELEGUNG[player_number]["grab"])
+	var key := InputSetup.key_hint(player_number, "grab")
 	var box := Rect2(sx - 13.0, sy - 12.0, 26.0, 24.0)
 	draw_rect(box, Color(0.08, 0.07, 0.12))
 	draw_rect(box, f.body_color, false, 2.0)

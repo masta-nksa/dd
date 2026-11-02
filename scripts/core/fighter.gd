@@ -163,6 +163,7 @@ func _tick_ground(delta: float) -> void:
 		return
 	if _jump_requested and not is_carrying_heavy():
 		velocity_y = jump_speed
+		SoundBank.play(&"jump")
 		_set_state(State.JUMP)
 		return
 	if _request != &"" and _start_requested_attack():
@@ -214,6 +215,7 @@ func start_attack(id: StringName) -> void:
 	hit_box.attack = attack
 	hit_box.hit_targets.clear()
 	hit_box.active = false
+	SoundBank.play(&"throw" if attack.throws else &"whoosh")
 	vel_x = facing * attack.lunge
 	if attack.health_cost > 0:
 		current_health = maxi(current_health - attack.health_cost, 1)
@@ -259,6 +261,7 @@ func _tick_knockdown(delta: float) -> void:
 	if not _landed:
 		if _fall(delta):
 			_landed = true
+			SoundBank.play(&"thud")
 			_state_time = 0.0
 			vel_x *= 0.5
 	elif _state_time >= LIE_TIME:
@@ -314,6 +317,7 @@ func on_hit_landed(a: AttackData) -> void:
 			break_weapon()
 
 func break_weapon() -> void:
+	SoundBank.play(&"crack")
 	if items != null:
 		items.effects.debris(pos_x + facing * 40.0, pos_z, 60.0,
 			[Color(0.70, 0.49, 0.27), Color(0.47, 0.34, 0.19), Color(0.88, 0.72, 0.47)], 16)

@@ -1,6 +1,12 @@
 class_name Main
 extends Node2D
-## Startpunkt von Doppelfaust. Stufe 4: Level, zwei Kämpfer, Kampfsystem, Gegner mit Wellen, HUD.
+## Die Spielszene von Doppelfaust: Level, Kämpfer, Kampfsystem, Gegner mit Wellen, HUD.
+## Das Menü und der Endbildschirm liegen in `App`; hier wird nur das Ende gemeldet.
+
+signal run_ended(won: bool)
+
+const WIN_DELAY := 4.0
+const LOSE_DELAY := 2.0
 
 static var waves_enabled := true       # Tests schalten die Wellen ab
 static var training_dummy := false     # Trainingspuppe wie in Stufe 3
@@ -16,6 +22,10 @@ var items: WorldItems
 var director: WaveDirector
 var hud: Hud
 var game_over := false
+var play_time := 0.0
+
+var _end_wait := 0.0
+var _ended := false
 
 func _ready() -> void:
 	InputSetup.einrichten()
@@ -58,6 +68,7 @@ func _ready() -> void:
 	if dummy != null:
 		combat.fighters.append(dummy)
 	combat.items = items
+	combat.hit_landed.connect(_on_hit_landed)
 	add_child(combat)
 
 	camera_rig = CameraRig.new()
@@ -86,18 +97,40 @@ func _ready() -> void:
 	director.two_players = fighters.size() > 1
 	director.finished = not waves_enabled
 	director.banner.connect(hud.show_banner)
+	director.banner.connect(func(_text: String): SoundBank.play(&"wave"))
 	director.go_hint.connect(hud.show_go)
-	director.all_waves_done.connect(func(): hud.message = "GESCHAFFT!")
+	director.all_waves_done.connect(_on_all_waves_done)
 	add_child(director)
 
-func _physics_process(_delta: float) -> void:
-	if game_over or not waves_enabled:
+func _physics_process(delta: float) -> void:
+	if not waves_enabled or _ended:
 		return
-	for f in fighters:
-		if f.current_health > 0:
-			return
-	game_over = true
-	hud.message = "GAME OVER"
+	if not director.finished and not game_over:
+		play_time += delta
+		for f in fighters:
+			if f.current_health > 0:
+				return
+		game_over = true
+		hud.message = "GAME OVER"
+		SoundBank.play(&"lose")
+	_end_wait += delta
+	if _end_wait >= (LOSE_DELAY if game_over else WIN_DELAY):
+		_ended = true
+		run_ended.emit(not game_over)
+
+func _on_all_waves_done() -> void:
+	if game_over:
+		return
+	hud.message = "GESCHAFFT!"
+	SoundBank.play(&"win")
+
+func _on_hit_landed(_attacker: Fighter, target: Fighter, attack: AttackData) -> void:
+	if target.state == Fighter.State.KNOCKDOWN:
+		SoundBank.play(&"heavy")
+	elif attack.pose == &"kick":
+		SoundBank.play(&"kick")
+	else:
+		SoundBank.play(&"punch")
 
 func _on_dummy_died() -> void:
 	await get_tree().create_timer(2.5).timeout

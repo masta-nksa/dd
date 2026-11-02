@@ -67,6 +67,8 @@ func hit(items: WorldItems) -> void:
 	items.effects.debris(pos_x, pos_z, height * 0.6, debris_colors(), 5)
 	if hp <= 0:
 		items.break_prop(self, true)
+	else:
+		SoundBank.play(&"punch")
 
 func _physics_process(delta: float) -> void:
 	shake = maxf(shake - delta, 0.0)
