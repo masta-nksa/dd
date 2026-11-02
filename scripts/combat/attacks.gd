@@ -45,3 +45,20 @@ static func _build() -> void:
 		"knockdown": true, "reach": 62.0, "box_size": Vector3(54, 70, 44), "box_y": 30.0})
 	_make(&"g_rammen", {"startup": 0.40, "active": 0.45, "recovery": 0.45, "damage": 13, "knockback": 320.0,
 		"knockdown": true, "reach": 52.0, "box_size": Vector3(52, 70, 50), "box_y": 20.0, "drive": 430.0})
+
+	# --- Baseballschläger ---
+	_make(&"w_bat1", {"startup": 0.10, "active": 0.08, "recovery": 0.20, "damage": 12, "knockback": 140.0,
+		"hitstun": 0.38, "reach": 78.0, "box_size": Vector3(64, 52, 40), "box_y": 40.0,
+		"chain_to": &"w_bat2", "durability": 1, "pose": &"swing"})
+	_make(&"w_bat2", {"startup": 0.14, "active": 0.09, "recovery": 0.30, "damage": 18, "knockback": 380.0,
+		"knockdown": true, "reach": 82.0, "box_size": Vector3(70, 60, 44), "box_y": 36.0, "lunge": 70.0,
+		"durability": 1, "pose": &"swing"})
+	_make(&"w_homerun", {"startup": 0.14, "active": 0.09, "recovery": 0.30, "damage": 18, "knockback": 380.0,
+		"knockdown": true, "reach": 82.0, "box_size": Vector3(70, 60, 44), "box_y": 36.0, "lunge": 70.0,
+		"durability": 2, "pose": &"swing"})
+	# --- Werfen: der Wurf selbst richtet keinen Schaden an, erst das fliegende Geschoss ---
+	_make(&"throw", {"startup": 0.12, "active": 0.02, "recovery": 0.22, "damage": 0, "throws": true, "pose": &"throw"})
+	_make(&"t_bat", {"damage": 14, "knockback": 200.0, "hitstun": 0.6})
+	_make(&"t_crate", {"damage": 18, "knockback": 140.0, "hitstun": 1.2})
+	_make(&"t_barrel", {"damage": 24, "knockback": 300.0, "knockdown": true})
+	_make(&"t_bin", {"damage": 12, "knockback": 120.0, "hitstun": 1.0})

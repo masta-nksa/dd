@@ -6,6 +6,7 @@ extends Node
 signal hit_landed(attacker: Fighter, target: Fighter, attack: AttackData)
 
 var fighters: Array[Fighter] = []
+var items: WorldItems = null
 
 func _physics_process(_delta: float) -> void:
 	for attacker in fighters:
@@ -22,3 +23,26 @@ func _physics_process(_delta: float) -> void:
 				if target.take_hit(hb.attack, attacker):
 					hb.hit_targets.append(target)
 					hit_landed.emit(attacker, target, hb.attack)
+					attacker.on_hit_landed(hb.attack)
+		if items != null and attacker.team == 0:
+			for prop in items.props.duplicate():
+				if prop.breakable and not prop in hb.hit_props and box.intersects(prop.hit_aabb()):
+					hb.hit_props.append(prop)
+					prop.hit(items)
+					attacker.on_hit_landed(hb.attack)
+	if items != null:
+		_check_projectiles()
+
+func _check_projectiles() -> void:
+	for proj in items.projectiles.duplicate():
+		if not proj.dangerous or not is_instance_valid(proj):
+			continue
+		var box: AABB = proj.box()
+		for target in fighters:
+			if target.team == proj.team or target in proj.hit_targets or not target.hurt_box.is_enabled():
+				continue
+			if box.intersects(target.hurt_box.world_box()):
+				if target.take_hit(proj.attack, proj.owner_fighter, proj.pos_x):
+					proj.on_hit(target)
+					hit_landed.emit(proj.owner_fighter, target, proj.attack)
+					break

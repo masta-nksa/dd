@@ -1,6 +1,6 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-02. Stufen 1–4 fertig und headless getestet (`tests/stufe2_test.gd`, `stufe3_test.gd`, `stufe4_test.gd`).
+Stand: 2026-11-02. Stufen 1–5 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe5_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Web-Export noch nicht lokal getestet (Export-Templates fehlen).
 
@@ -33,10 +33,21 @@ Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Web-Export noch nich
 - Balance: Der einfache Bot (Dauerfeuer) gewinnt 28 von 28 sterblichen Läufen mit 48–80 LP Rest; ein Mensch spielt anders.
   Echte Schwierigkeit bitte von Hand prüfen. Nicht portiert: Hindernis-Umweg (`umweg`), weil es noch keine Kisten gibt (Stufe 5).
 
+## Stufe 5 (Waffen und Requisiten) – Aufbau
+- `scripts/world/`: `Prop` (Kiste, Fass, Tonne, Laterne; blockieren am Boden, Sprung drüber), `WorldItems` (Register + Waffenverteiler),
+  `WeaponData`/`Carry` (Tragedinge), `WeaponPickup`, `Pickup` (Huhn +40, Apfel +15, Geld +1000), `Projectile` (Wurf), `Effects` (Splitter, Texte).
+- Greifen: 1P E, 2P J. Nichts in Reichweite → das Getragene wird geworfen. Mit Kiste/Fass/Tonne wirft jede Angriffstaste, kein Sprung, langsamer.
+- Schläger: Kette 12/18 (2. wirft um), Homerun (Spezial) kostet 2, 10 Haltbarkeit pro Treffer, Wurf 14 Schaden und kostet 3.
+  Kiste 18 + 1,2 s, Fass 24 + Umwerfen, Tonne 12 + 1,0 s; zerbricht beim Wurf. Bei Treffern fällt Schweres zu Boden, Gestorbene lassen Waffen blinkend liegen (8 s).
+- Drops (Gegner: Schläger 10 %, Flitzer 12 %, Brocken 30 %; Requisiten: Kiste 22 %, Fass 12 %, Tonne 15 %) mit Bremsen wie im Pygame-Spiel;
+  erste Kiste enthält immer einen Schläger. Gegner umgehen Hindernisse (`Enemy._detour`) und benutzen keine Waffen.
+- Wurfweite ist kurz (~120 px), wie im Pygame-Spiel (Gravitation 1800 statt 1900). Bekannte Mängel: Fass wirft den Brocken um (Gewicht 1,7 teilt nur den Rückstoss).
+- Tests: 26 Prüfungen in `stufe5_test.gd`, Bot-Läufe mit Requisiten (6 von 6 ohne Softlock).
+
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
 - Host-autoritativ: ein Client simuliert die Welt, der andere sendet Eingaben; Client-Prediction nur für die eigene Figur, getrennt vom Spielzustand.
 - Offene Fragen: Latenz-Toleranz, Wiederverbinden, Spielerzahl (nur 2?).
 
 ## Nächste Schritte
-- Stufe 5: Waffen (Greifen, Werfen, Schläger, Kisten, Drops) und Requisiten.
+- Stufe 6: Töne, Menü, Pause, Game-Over-/Siegbildschirm, Rekord, Controller.

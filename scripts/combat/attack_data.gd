@@ -19,6 +19,8 @@ var health_cost := 0       # Lebenspunkte, die der Angriff kostet
 var chain_to: StringName = &""   # nächster Schlag der Kette
 var drive := 0.0           # hält während des aktiven Teils diese Vorwärtsgeschwindigkeit (Rammen)
 var chain_needs_hit := false   # Kette läuft nur weiter, wenn der Schlag getroffen hat
+var durability := 0         # Haltbarkeit, die ein Treffer der Waffe kostet
+var throws := false        # in der Anlaufphase fliegt das Getragene los
 var pose: StringName = &"punch"  # Darstellung: punch, kick, spin
 
 func total_time() -> float:

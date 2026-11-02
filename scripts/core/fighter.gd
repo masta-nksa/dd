@@ -6,7 +6,7 @@ extends Node2D
 
 signal died
 
-enum State { IDLE, WALK, JUMP, ATTACK, HIT, KNOCKDOWN, GETUP, DEAD }
+enum State { IDLE, WALK, JUMP, ATTACK, HIT, KNOCKDOWN, GETUP, DEAD, GRAB }
 
 static var debug_boxes := false
 
@@ -44,6 +44,11 @@ var attack_time := 0.0
 var score := 0
 var last_attacker: Fighter = null
 var lock_facing := false   # Blickrichtung setzt der Controller selbst (Gegner)
+var carried: Carry = null
+var items: WorldItems = null
+var _grab_requested := false
+var _grab_target: Node2D = null
+var _thrown := false
 
 var _jump_requested := false
 var _request: StringName = &""
@@ -79,6 +84,12 @@ func request_attack(kind: StringName) -> void:
 	_request = kind
 	_request_timer = REQUEST_WINDOW
 
+func request_grab() -> void:
+	_grab_requested = true
+
+func is_carrying_heavy() -> bool:
+	return carried != null and carried.heavy
+
 func is_invulnerable() -> bool:
 	return state == State.KNOCKDOWN or state == State.GETUP or state == State.DEAD
 
@@ -113,8 +124,11 @@ func _physics_process(delta: float) -> void:
 		State.KNOCKDOWN: _tick_knockdown(delta)
 		State.GETUP: _tick_getup()
 		State.DEAD: _slide(delta)
+		State.GRAB: _tick_grab(delta)
 
 	_jump_requested = false
+	_grab_requested = false
+	_push_out_of_props()
 	_apply_position()
 	queue_redraw()
 
@@ -145,13 +159,15 @@ func _fall(delta: float) -> bool:
 	return false
 
 func _tick_ground(delta: float) -> void:
-	if _jump_requested:
+	if _grab_requested and _try_grab():
+		return
+	if _jump_requested and not is_carrying_heavy():
 		velocity_y = jump_speed
 		_set_state(State.JUMP)
 		return
 	if _request != &"" and _start_requested_attack():
 		return
-	_move(delta)
+	_move(delta, carried.data["tempo"] if is_carrying_heavy() else 1.0)
 	state = State.WALK if move_input.length() > 0.1 else State.IDLE
 
 func _tick_jump(delta: float) -> void:
@@ -164,12 +180,19 @@ func _tick_jump(delta: float) -> void:
 		_set_state(State.IDLE)
 
 func _start_requested_attack() -> bool:
+	if is_carrying_heavy():   # mit Kiste, Fass oder Tonne in den Händen wirft jede Angriffstaste
+		start_attack(&"throw")
+		return true
+	var armed := carried != null
 	match _request:
 		&"punch":
-			start_attack(&"punch1")
+			start_attack(&"w_bat1" if armed else &"punch1")
 		&"kick":
 			start_attack(&"kick")
 		&"special":
+			if armed:
+				start_attack(&"w_homerun")
+				return true
 			if current_health <= Attacks.get_attack(&"spin").health_cost:
 				_request = &""
 				return false
@@ -179,7 +202,11 @@ func _start_requested_attack() -> bool:
 	return true
 
 func start_attack(id: StringName) -> void:
+	if String(id).begins_with("w_") and (carried == null or carried.heavy):
+		id = &"punch1"   # die Waffe ist inzwischen weg (zerbrochen): mit blossen Fäusten weiter
 	attack = Attacks.get_attack(id)
+	_thrown = false
+	hit_box.hit_props.clear()
 	attack_time = 0.0
 	_air_attack = pos_y > 0.0
 	_request = &""
@@ -195,7 +222,10 @@ func start_attack(id: StringName) -> void:
 func _tick_attack(delta: float) -> void:
 	var a := attack
 	attack_time += delta
-	hit_box.active = attack_time >= a.startup and attack_time < a.startup + a.active
+	hit_box.active = a.damage > 0 and attack_time >= a.startup and attack_time < a.startup + a.active
+	if a.throws and not _thrown and attack_time >= a.startup:
+		_thrown = true
+		_do_throw()
 	if _air_attack:
 		_move(delta, 0.6)
 		if _fall(delta):
@@ -238,14 +268,85 @@ func _tick_getup() -> void:
 	if _state_time >= GETUP_TIME:
 		_set_state(State.IDLE)
 
+# ---------------------------------------------------------------- Greifen und Werfen
+
+func _try_grab() -> bool:
+	_grab_requested = false
+	if items == null:
+		return false
+	var target := items.find_grabbable(self)
+	if target == null:
+		if carried != null:
+			start_attack(&"throw")   # nichts zum Aufheben in der Nähe: das Getragene werfen
+			return true
+		return false
+	_grab_target = target
+	move_input = Vector2.ZERO
+	_set_state(State.GRAB)
+	return true
+
+func _tick_grab(_delta: float) -> void:
+	if _grab_target != null and _state_time >= 0.09:
+		var t := _grab_target
+		_grab_target = null
+		items.take(self, t)
+	if _state_time >= 0.18:
+		_set_state(State.IDLE)
+
+func lay_down(died: bool) -> void:
+	if items != null:
+		items.put_down(self, died)
+	else:
+		carried = null
+
+func _do_throw() -> void:
+	var c := carried
+	if c == null or items == null:
+		return
+	carried = null
+	c.rest -= c.data["throw_cost"]
+	items.spawn_projectile(self, c)
+
+func on_hit_landed(a: AttackData) -> void:
+	if carried != null and not carried.heavy and a.durability > 0:
+		carried.rest -= a.durability
+		if carried.rest <= 0:
+			break_weapon()
+
+func break_weapon() -> void:
+	if items != null:
+		items.effects.debris(pos_x + facing * 40.0, pos_z, 60.0,
+			[Color(0.70, 0.49, 0.27), Color(0.47, 0.34, 0.19), Color(0.88, 0.72, 0.47)], 16)
+		items.effects.text(pos_x, pos_z, 110.0, "KAPUTT!", Color(1.0, 0.3, 0.3))
+	carried = null
+	_request = &""
+
+## Schiebt den Körper aus Requisiten heraus (am Boden; wer hoch genug springt, fliegt drüber).
+func _push_out_of_props() -> void:
+	if items == null:
+		return
+	for p in items.props:
+		if not p.is_blocking() or pos_y >= p.height - 4.0:
+			continue
+		var ox := p.width * 0.5 + 12.0 - absf(pos_x - p.pos_x)
+		var oz := p.depth + 5.0 - absf(pos_z - p.pos_z)
+		if ox <= 0.0 or oz <= 0.0:
+			continue
+		if ox < oz * 2.5:
+			pos_x += ox * (1.0 if pos_x >= p.pos_x else -1.0)
+		else:
+			pos_z += oz * (1.0 if pos_z >= p.pos_z else -1.0)
+	pos_x = clampf(pos_x, bounds.position.x, bounds.end.x)
+	pos_z = clampf(pos_z, bounds.position.y, bounds.end.y)
+
 # ---------------------------------------------------------------- Treffer
 
 ## Gibt true zurück, wenn der Treffer zählt.
-func take_hit(a: AttackData, from: Fighter) -> bool:
+func take_hit(a: AttackData, from: Fighter, from_x := NAN) -> bool:
 	if is_invulnerable():
 		return false
 	current_health = maxi(current_health - a.damage, 0)
-	var dir := signi(int(pos_x - from.pos_x))
+	var dir := signi(int(pos_x - (from.pos_x if is_nan(from_x) else from_x)))
 	if dir == 0:
 		dir = from.facing
 	facing = -dir
@@ -253,9 +354,13 @@ func take_hit(a: AttackData, from: Fighter) -> bool:
 	attack = null
 	_air_attack = false
 	_freeze_time = HITSTOP
-	from._freeze_time = HITSTOP
+	if is_nan(from_x):
+		from._freeze_time = HITSTOP
 	_flash_time = 0.12
 	last_attacker = from
+	if carried != null and (carried.heavy or current_health <= 0):
+		lay_down(current_health <= 0)   # Schweres lässt man bei jedem Treffer fallen; Gestorbene lassen die Waffe liegen
+	_grab_target = null
 	vel_x = dir * a.knockback / weight
 	if current_health <= 0 or a.knockdown or pos_y > 0.0:
 		_landed = false
@@ -301,6 +406,8 @@ func _draw() -> void:
 			angle = -f * PI * 0.5 * (1.0 - _state_time / GETUP_TIME)
 	elif state == State.HIT:
 		angle = -f * 0.18
+	elif state == State.GRAB:
+		angle = f * 0.45
 	draw_set_transform(offset, angle, Vector2(k, k))
 	_draw_figure(f)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -333,7 +440,7 @@ func _draw_figure(f: float) -> void:
 	draw_rect(Rect2(-13, -38 + bob, 26, 4), body_color.darkened(0.6))
 	# Arme
 	var winding_up := pose == &"punch" and phase == 0.0 and attack.startup >= 0.15
-	var punch_arm := pose == &"punch" and phase == 1.0
+	var punch_arm := (pose == &"punch" and phase == 1.0) or (pose == &"throw" and phase >= 1.0)
 	if winding_up:
 		draw_rect(Rect2(f * 10 - 4, -96, 8, 30), skin)
 	elif punch_arm:
@@ -345,10 +452,31 @@ func _draw_figure(f: float) -> void:
 		draw_arc(Vector2(0, -50), 58.0, 0.0, TAU, 32, Color(1, 1, 1, 0.6), 4.0)
 	else:
 		draw_rect(Rect2(-f * 12 - 4, -70 + bob, 8, 28), skin.darkened(0.15))
+	_draw_carried(f, phase, pose, bob)
 	# Kopf
 	draw_circle(Vector2(0, -86 + bob), 12.0, skin)
 	draw_arc(Vector2(0, -88 + bob), 12.5, PI, TAU, 16, Color(0.15, 0.1, 0.1), 5.0)
 	draw_circle(Vector2(f * 5, -86 + bob), 1.8, Color.BLACK)
+
+func _draw_carried(f: float, phase: float, pose: StringName, bob: float) -> void:
+	if carried == null:
+		return
+	if carried.heavy:
+		var rect_origin := Vector2(0, -88 + bob)
+		Prop.draw_art(self, carried.kind, carried.prop.width, carried.prop.height, carried.prop.color, 1.0, rect_origin)
+		return
+	var hand := Vector2(f * 14.0, -52.0 + bob)
+	var dir := Vector2(f * 0.35, -1.0)            # in Ruhe schräg nach oben
+	if pose == &"swing":
+		if phase == 0.0:
+			dir = Vector2(-f * 0.6, -1.0)         # ausholen
+		elif phase == 1.0:
+			dir = Vector2(f, 0.1)                 # Schwung nach vorn
+		else:
+			dir = Vector2(f * 0.6, 0.8)           # ausschwingen
+	var grip := hand - dir.normalized() * 8.0
+	var tip := hand + dir.normalized() * 52.0
+	WeaponPickup.draw_bat(self, grip, tip, carried.ratio())
 
 func _draw_health_bar() -> void:
 	if state == State.DEAD:

@@ -25,6 +25,7 @@ var enemies: Array[Enemy] = []
 var camera: CameraRig
 var combat: CombatSystem
 var level: Level
+var items: WorldItems
 var two_players := true
 var finished := false
 var index := 0
@@ -98,6 +99,7 @@ func _spawn(type: StringName) -> void:
 		_side = -_side
 	var enemy := Enemy.create(type)
 	enemy.director = director_ref()
+	enemy.items = items
 	var lane := level.lane_bounds()
 	enemy.setup(screen_left() - 60.0 if seite < 0 else screen_right() + 60.0,
 		randf_range(lane.position.y + 15.0, lane.end.y - 15.0), lane)
@@ -113,6 +115,8 @@ func director_ref() -> WaveDirector:
 func _on_enemy_died(enemy: Enemy) -> void:
 	if enemy.last_attacker != null:
 		enemy.last_attacker.score += enemy.points
+	if items != null:
+		items.roll_weapon(enemy.type_id, enemy.pos_x, enemy.pos_z)
 
 func _remove_corpses() -> void:
 	for g in enemies.duplicate():

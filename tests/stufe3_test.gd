@@ -28,6 +28,7 @@ func aufstellen(szene: Node, abstand: float = 40.0) -> void:
 
 func _init() -> void:
 	Main.waves_enabled = false
+	Main.props_enabled = false
 	Main.training_dummy = true
 	var szene: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(szene)

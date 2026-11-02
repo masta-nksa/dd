@@ -9,6 +9,16 @@ const STREET_TOP := 290.0
 func _ready() -> void:
 	z_index = -4000
 
+## (Art, x, z) – z ist der Fusspunkt (Port von `REQUISITEN_PLAN`)
+const PROP_PLAN := [
+	[&"lamp", 300, 330], [&"crate", 760, 360], [&"bin", 1000, 340],
+	[&"lamp", 1120, 330], [&"barrel", 1560, 470], [&"crate", 1700, 345],
+	[&"lamp", 1950, 330], [&"barrel", 2500, 350], [&"barrel", 2540, 372], [&"crate", 2900, 480],
+	[&"lamp", 2780, 330], [&"bin", 3100, 342], [&"crate", 3500, 355], [&"lamp", 3620, 330],
+	[&"barrel", 3950, 470], [&"crate", 4200, 350], [&"crate", 4246, 350], [&"lamp", 4480, 330],
+	[&"barrel", 5000, 360], [&"lamp", 5300, 330],
+]
+
 func lane_bounds() -> Rect2:
 	return Rect2(40.0, 322.0, WIDTH - 80.0, 200.0)
 

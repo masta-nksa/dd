@@ -63,8 +63,8 @@ func _physics_process(delta: float) -> void:
 		_think(delta)
 	super._physics_process(delta)
 
-func take_hit(a: AttackData, from: Fighter) -> bool:
-	var knocked := super.take_hit(a, from)
+func take_hit(a: AttackData, from: Fighter, from_x := NAN) -> bool:
+	var knocked := super.take_hit(a, from, from_x)
 	# Der Boss lässt sich von leichten Schlägen nicht so leicht aus dem Konzept bringen
 	if knocked and type_id == &"boss" and state == State.HIT:
 		_hit_time *= 0.6
@@ -139,6 +139,7 @@ func _ai_chase() -> void:
 		goal_x = target.pos_x + side * dist
 		goal_z = target.pos_z + _wait_offset + 25.0 * sin(_anim_time * 0.9)
 		goal_x = clampf(goal_x, director.screen_left() + 40.0, director.screen_right() - 40.0)
+	goal_z = _detour(goal_x, goal_z)
 	_walk_to(goal_x, goal_z, not may_attack)
 	if dx != 0.0:
 		facing = 1 if dx > 0.0 else -1
@@ -180,6 +181,29 @@ func _start_retreat() -> void:
 	_retreat_dir = Vector2(-facing, [-1, 0, 1].pick_random())
 	_retreat_time = randf_range(0.35, 0.8)
 	_set_ai(Ai.RETREAT)
+
+## Steht ein Requisit zwischen mir und dem Ziel, gehe ich oben oder unten herum.
+func _detour(goal_x: float, goal_z: float) -> float:
+	if director.items == null:
+		return goal_z
+	var dir := 1 if goal_x > pos_x else -1
+	for p in director.items.props:
+		if not p.is_blocking():
+			continue
+		var ahead := (p.pos_x - pos_x) * dir
+		var in_front := ahead > 0.0 and ahead < 70.0 + p.width * 0.5
+		var target_behind := (goal_x - p.pos_x) * dir > 0.0
+		var same_lane := p.pos_z - p.depth - 8.0 < pos_z and pos_z < p.pos_z + p.depth + 8.0
+		if in_front and target_behind and same_lane:
+			var top := p.pos_z - p.depth - 16.0
+			var bottom := p.pos_z + p.depth + 16.0
+			var lane := director.level.lane_bounds()
+			if top < lane.position.y:
+				return bottom
+			if bottom > lane.end.y:
+				return top
+			return top if absf(goal_z - top) < absf(goal_z - bottom) else bottom
+	return goal_z
 
 func _walk_to(gx: float, gz: float, slow: bool) -> void:
 	var dx := gx - pos_x

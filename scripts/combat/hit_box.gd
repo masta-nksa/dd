@@ -5,6 +5,7 @@ extends Node
 var active := false
 var attack: AttackData
 var hit_targets: Array[Fighter] = []
+var hit_props: Array[Prop] = []
 
 func world_box() -> AABB:
 	var f := get_parent() as Fighter
