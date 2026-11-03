@@ -31,6 +31,11 @@ const RESPAWN_SAFE_TIME := 2.5
 const COMBO_TIME := 1.2
 
 var skin: Dictionary = Skins.KAI
+var fighter_id: StringName = &""   # gewählter Kämpfer (`FighterData`); leer = nur 2D-Figur
+var damage_factor := 1.0           # Werte des Kämpfers, siehe `FighterData`
+var attack_speed := 1.0
+var reach_factor := 1.0
+var model: ModelFigure = null      # 3D-Modell, solange die Datei vorhanden ist
 var player_number := 0     # 0 = Gegner; 1 oder 2 zeichnet Ring und Kennzeichen
 var lives := 0             # Extraleben
 var camera: CameraRig = null   # hier taucht man nach einem verlorenen Leben wieder auf
@@ -74,6 +79,7 @@ var _landed := false
 var _freeze_time := 0.0
 var _flash_time := 0.0
 var _anim_time := 0.0
+var _scaled_attacks := {}
 
 func _init() -> void:
 	hurt_box = HurtBox.new()
@@ -83,6 +89,10 @@ func _init() -> void:
 
 func _ready() -> void:
 	current_health = max_health
+	if fighter_id != &"":
+		model = ModelFigure.create(fighter_id)
+		if model != null:
+			add_child(model)
 
 func setup(start_x: float, start_z: float, new_bounds: Rect2) -> void:
 	pos_x = start_x
@@ -232,7 +242,7 @@ func _start_requested_attack() -> bool:
 func start_attack(id: StringName) -> void:
 	if String(id).begins_with("w_") and (carried == null or carried.heavy):
 		id = &"punch1"   # die Waffe ist inzwischen weg (zerbrochen): mit blossen Fäusten weiter
-	attack = Attacks.get_attack(id)
+	attack = _attack_for(id)
 	_thrown = false
 	hit_box.hit_props.clear()
 	attack_time = 0.0
@@ -247,6 +257,15 @@ func start_attack(id: StringName) -> void:
 	if attack.health_cost > 0:
 		current_health = maxi(current_health - attack.health_cost, 1)
 	_set_state(State.ATTACK)
+
+## Der Angriff mit den Faktoren dieses Kämpfers; ohne Abweichung die gemeinsame Vorlage.
+func _attack_for(id: StringName) -> AttackData:
+	var base := Attacks.get_attack(id)
+	if damage_factor == 1.0 and attack_speed == 1.0 and reach_factor == 1.0:
+		return base
+	if not _scaled_attacks.has(id):
+		_scaled_attacks[id] = Attacks.scaled(base, damage_factor, attack_speed, reach_factor)
+	return _scaled_attacks[id]
 
 func _tick_attack(delta: float) -> void:
 	var a := attack
@@ -490,8 +509,16 @@ func _draw() -> void:
 		var jitter := 0.0
 		if _flash_time > 0.0:   # zittert beim Treffer
 			jitter = 2.0 if int(_flash_time * 120.0) % 2 == 0 else -2.0
-		FigureArt.draw(self, skin, current_pose(), jitter, 0.0, facing, body_scale, _flash_time > 0.06, _anim_time,
-			_hold_carried if carried != null else Callable())
+		if model != null:
+			var pose := current_pose()
+			model.set_pose(pose, facing, _flash_time > 0.06)
+			model.draw(self, jitter, 0.0, body_scale)
+			if carried != null:
+				var h := model.hands(body_scale)
+				_hold_carried(h[0], h[1], h[2], h[3], body_scale)
+		else:
+			FigureArt.draw(self, skin, current_pose(), jitter, 0.0, facing, body_scale, _flash_time > 0.06, _anim_time,
+				_hold_carried if carried != null else Callable())
 		if player_number > 0 and not lying_down:
 			Art.text(self, "%dP" % player_number, 20.0, Vector2(0.0, -FigureArt.HEIGHT * body_scale - 14.0), body_color)
 	if debug_boxes:

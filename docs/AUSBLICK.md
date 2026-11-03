@@ -1,6 +1,6 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-02. Stufen 1–6 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe6_test.gd`).
+Stand: 2026-11-03. Stufen 1–7 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe7_test.gd`, dazu `grafik_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
@@ -21,7 +21,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 4. Gegner-KI (FSM), vier Typen, Boss, Wellen, Level mit Parallax
 5. Waffen Stufe 1 (Greifen, Werfen, Schläger, Kisten, Drops)
 6. Töne, HUD, Game-Over/Sieg, Rekord
-7. Kämpferwahl (Bruce, Chuck, Jackie, JCVD, zusätzlich Kai, Ria, Bruno, Mika; Modelle aus `tools/blender/build_fighter.py`), danach feinere Grafik (Sprites)
+7. Kämpferwahl mit acht Figuren und 3D-Modellen (Bruce, Chuck, Jackie, JCVD; zusätzlich Kai, Ria, Bruno, Mika; Modelle aus `tools/blender/build_fighter.py`)
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
@@ -64,7 +64,24 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - `Hud`: Felder mit `Portrait`, Balken mit Nachlaufspur, Herzen, Combo, Gegner- und Boss-Balken. `HeroFigure`: grosse Figuren in Menü und Endbildschirm.
 - Neu im Spiel: 2 Extraleben (`Fighter.lives`, Einsteigen von oben, 2,5 s unverwundbar), Combos und Punkte pro Treffer (`count_hit`). Das macht das Spiel leichter als in den Balance-Messungen von Stufe 4 beschrieben.
 - Tests: `grafik_test.gd`. Das Aussehen selbst prüfen nur Screenshots neben dem Original.
-- Die Spielerfiguren werden noch mit neuen Blender-Modellen überarbeitet; bis dahin zeichnet `FigureArt` sie in 2D wie im Original.
+- Gegner und Ersatzfiguren zeichnet `FigureArt` in 2D wie im Original; die Spielerfiguren sind seit Stufe 7 3D-Modelle (siehe dort).
+
+## Stufe 7 (Kämpferwahl, 3D-Figuren) – Aufbau
+- `FighterData` (`scripts/core/`): die acht Kämpfer mit Werten (LP, Tempo x/z, Sprung, Gewicht, Schadens-, Angriffstempo- und Reichweitenfaktor), 2D-`Skins` und Modellpfad.
+  Kai, Ria, Bruno, Mika nach `docs/PROJEKTSTAND.md` des Pygame-Spiels (Abschnitt 9, Spezial und eigene Combos noch nicht), Bruce, Chuck, Jackie, JCVD sind ein Vorschlag:
+  Bruce 96 LP, schnell (190/124, Angriffe ×1,15); Chuck 106 LP, wuchtig (160/105, Gewicht 1,20, Schaden ×1,06); Jackie 100 LP, höchster Sprung (670), Reichweite ×1,05; JCVD 102 LP, Reichweite ×1,15.
+  Balance noch ungemessen: `godot --headless --fixed-fps 3000 -s tests/stufe7_test.gd -- normal` (8 sterbliche Läufe je Figur; Ziel wie im Original: keiner über 35 %, keiner unter 10 % Siegquote; der Bot misst Tempo kaum).
+- `SelectScreen` (`scripts/ui/`) zwischen Menü und Spiel: Hauptfiguren oben, weitere Kämpfer unten, je Spieler ein Cursor (1P blau, 2P rot). Bestätigen: Schlag oder Sprung, Zurück: Tritt, Esc: ins Menü.
+  Jede Figur nur einmal: Wer bestätigt, sperrt sie, der Cursor des anderen springt weiter und überspringt belegte Karten. Start 0,5 s nach der letzten Bestätigung. Neustart behält die Wahl (`App.picks`); `Main.picks` (Standard Kai/Ria) gilt für Tests.
+- `Fighter` bekam `fighter_id`, `damage_factor`, `attack_speed`, `reach_factor`; `Attacks.scaled` macht daraus eine Kopie des Angriffs (die Vorlage bleibt unverändert).
+- `ModelFigure` (`scripts/art/`): Das 3D-Modell steht in einem eigenen `SubViewport` (256 px, orthografische Seitenkamera, Teilbild wird auf halbe Grösse gezeichnet); `Fighter._draw` zeichnet das Bild statt `FigureArt`.
+  Die Haltung kommt aus denselben Gelenkwinkeln (`Poses`), das Spiel bleibt 2D. Schläger und Kisten sitzen an den Handknochen. Fehlt die `.glb` (oder läuft es headless), zeichnet `FigureArt` die Figur wie vorher.
+  Fallstrick: `Skeleton3D.get_bone_global_rest` liefert in Godot 4.4.1 für den Hüft-Teil Nullen; `ModelFigure` rechnet die Rast-Pose selbst aus.
+- Die `.glb` liegen nicht im Repo (`.gitignore`). Im Workflow baut ein erster Job (`models`) sie mit Blender 5.0.1 aus `tools/blender/build_fighter.py` und gibt sie als Artefakt an den Export weiter. Schlägt er fehl, läuft der Export mit den 2D-Figuren weiter.
+  Lokal: `blender -b -P tools/blender/build_fighter.py -- --fighter all --no-blend`, danach `godot --headless --import`.
+- Im Spiel noch 2D: Gegner, HUD-Porträts (2D-Kopf mit demselben Aussehen), Helden in Menü und Endbildschirm (Kai, Ria).
+- Tests: `stufe7_test.gd` (Daten, Wahl mit Sperre, App-Ablauf, Werte im Kampf, Modelle samt Haltung und Handpunkten, je ein Bot-Lauf pro Figur). Die Modell-Prüfungen überspringt der Test ohne `.glb`.
+  Online geprüft (2026-11-03): Workflow baut die acht `.glb` (Artefakt 314 KB), Wahl und Spielstart mit Bruce und Chuck laufen im Browser. Nicht geprüft: Leistung bei längerem Spiel, Balance, echtes Gamepad in der Wahl. Die Schrift des Spiels hat keine Pfeil-Zeichen (←/→).
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
@@ -72,5 +89,6 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Offene Fragen: Latenz-Toleranz, Wiederverbinden, Spielerzahl (nur 2?).
 
 ## Nächste Schritte
-- Neue Blender-Figuren abwarten, dann entscheiden, wie sie ins Spiel kommen.
-- Stufe 7: Kämpferwahl (Bruce, Chuck, Jackie, JCVD, zusätzlich Kai, Ria, Bruno, Mika).
+- Browser-Prüfung der Online-Fassung mit den Modellen (nach dem ersten Lauf des Workflows `Online stellen`).
+- Balance der acht Figuren messen, Werte von Bruce, Chuck, Jackie, JCVD mit dem User abstimmen.
+- Eigene Spezialangriffe und Combos je Figur (Pygame-Konzept, Abschnitt 9); Gegner und Porträts als 3D.
