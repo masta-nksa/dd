@@ -70,6 +70,9 @@ func _physics_process(delta: float) -> void:
 		else:
 			go_hint.emit()
 
+func is_wave_active() -> bool:
+	return not _active.is_empty()
+
 func _finish() -> void:
 	finished = true
 	all_waves_done.emit()
@@ -115,6 +118,8 @@ func director_ref() -> WaveDirector:
 func _on_enemy_died(enemy: Enemy) -> void:
 	if enemy.last_attacker != null:
 		enemy.last_attacker.score += enemy.points
+		if items != null:
+			items.effects.text(enemy.pos_x, enemy.pos_z, FigureArt.HEIGHT * enemy.body_scale + 20.0, "+%d" % enemy.points)
 	if items != null:
 		items.roll_weapon(enemy.type_id, enemy.pos_x, enemy.pos_z)
 

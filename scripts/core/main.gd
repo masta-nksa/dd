@@ -7,6 +7,7 @@ signal run_ended(won: bool)
 
 const WIN_DELAY := 4.0
 const LOSE_DELAY := 2.0
+const EXTRA_LIVES := 2
 
 static var waves_enabled := true       # Tests schalten die Wellen ab
 static var training_dummy := false     # Trainingspuppe wie in Stufe 3
@@ -38,10 +39,13 @@ func _ready() -> void:
 		for entry in Level.PROP_PLAN:
 			items.add_prop(entry[0], float(entry[1]), float(entry[2]))
 
-	var farben := [Color(0.2, 0.45, 0.9), Color(0.9, 0.25, 0.25)]
+	var aussehen := [Skins.KAI, Skins.RIA]
 	for i in (2 if two_players else 1):
 		var fighter := Fighter.new()
-		fighter.body_color = farben[i]
+		fighter.body_color = Art.PLAYER_COLORS[i]
+		fighter.skin = aussehen[i]
+		fighter.player_number = i + 1
+		fighter.lives = EXTRA_LIVES if waves_enabled else 0
 		fighter.team = 0
 		add_child(fighter)
 		fighter.setup(200.0 + i * 80.0, 400.0 + i * 20.0, level.lane_bounds())
@@ -54,7 +58,7 @@ func _ready() -> void:
 
 	if training_dummy:
 		dummy = Fighter.new()
-		dummy.body_color = Color(0.85, 0.6, 0.15)
+		dummy.skin = Skins.THUG
 		dummy.team = 1
 		add_child(dummy)
 		dummy.setup(520.0, 410.0, level.lane_bounds())
@@ -79,6 +83,8 @@ func _ready() -> void:
 	items.camera = camera_rig
 	items.keep_on_screen = waves_enabled
 	camera_rig.position = Vector2(480.0, Level.HEIGHT * 0.5)
+	for f in fighters:
+		f.camera = camera_rig
 
 	var layer := CanvasLayer.new()
 	hud = Hud.new()
@@ -96,6 +102,7 @@ func _ready() -> void:
 	director.items = items
 	director.two_players = fighters.size() > 1
 	director.finished = not waves_enabled
+	hud.director = director
 	director.banner.connect(hud.show_banner)
 	director.banner.connect(func(_text: String): SoundBank.play(&"wave"))
 	director.go_hint.connect(hud.show_go)
@@ -108,7 +115,7 @@ func _physics_process(delta: float) -> void:
 	if not director.finished and not game_over:
 		play_time += delta
 		for f in fighters:
-			if f.current_health > 0:
+			if not f.is_out():
 				return
 		game_over = true
 		hud.message = "GAME OVER"
@@ -123,14 +130,28 @@ func _on_all_waves_done() -> void:
 		return
 	hud.message = "GESCHAFFT!"
 	SoundBank.play(&"win")
+	for f in fighters:
+		f.cheer = true
 
-func _on_hit_landed(_attacker: Fighter, target: Fighter, attack: AttackData) -> void:
-	if target.state == Fighter.State.KNOCKDOWN:
+func _on_hit_landed(attacker: Fighter, target: Fighter, attack: AttackData) -> void:
+	var knocked := target.state == Fighter.State.KNOCKDOWN
+	if knocked:
 		SoundBank.play(&"heavy")
-	elif attack.pose == &"kick":
+	elif attack.pose in Poses.KICKS:
 		SoundBank.play(&"kick")
 	else:
 		SoundBank.play(&"punch")
+	if attacker.team == 0 and target.team != 0:
+		attacker.count_hit(attack)
+	hud.note_hit(target)
+	camera_rig.shake(6.0 if knocked else 2.0)
+	# Der Funke sitzt in der Mitte der Überschneidung von Schlag und Körper, bei Würfen an der Figur
+	var at := Vector3(target.pos_x, target.pos_y + 50.0 * target.body_scale, target.pos_z)
+	if attacker.hit_box.active:
+		var overlap := attacker.hit_box.world_box().intersection(target.hurt_box.world_box())
+		if overlap.has_volume():
+			at = overlap.get_center()
+	items.effects.spark(at.x, at.z, at.y, knocked)
 
 func _on_dummy_died() -> void:
 	await get_tree().create_timer(2.5).timeout

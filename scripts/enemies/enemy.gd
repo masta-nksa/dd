@@ -9,16 +9,16 @@ extends Fighter
 enum Ai { LURK, CHASE, ATTACK, RETREAT, HURT, DEAD }
 
 const TYPES := {
-	&"thug": {"label": "Schläger", "color": Color(0.35, 0.55, 0.35), "hp": 36, "scale": 1.0, "speed": Vector2(118, 78),
+	&"thug": {"skin": Skins.THUG, "hp": 36, "scale": 1.0, "speed": Vector2(118, 78),
 		"weight": 1.0, "points": 500, "attacks": [[&"g_schlag", 3], [&"g_tritt", 2]], "reach": 44.0,
 		"pause": Vector2(0.55, 1.3), "combo": 0.35},
-	&"dasher": {"label": "Flitzer", "color": Color(0.6, 0.3, 0.75), "hp": 26, "scale": 0.95, "speed": Vector2(178, 112),
+	&"dasher": {"skin": Skins.DASHER, "hp": 26, "scale": 0.95, "speed": Vector2(178, 112),
 		"weight": 0.85, "points": 600, "attacks": [[&"g_flinktritt", 3], [&"g_schlag", 1]], "reach": 48.0,
 		"pause": Vector2(0.3, 0.9), "combo": 0.2},
-	&"brute": {"label": "Brocken", "color": Color(0.85, 0.5, 0.15), "hp": 80, "scale": 1.28, "speed": Vector2(82, 56),
+	&"brute": {"skin": Skins.BRUTE, "hp": 80, "scale": 1.28, "speed": Vector2(82, 56),
 		"weight": 1.7, "points": 1500, "attacks": [[&"g_hammer", 2], [&"g_schlag", 2]], "reach": 58.0,
 		"pause": Vector2(0.8, 1.6), "combo": 0.0},
-	&"boss": {"label": "Granit", "color": Color(0.55, 0.1, 0.12), "hp": 210, "scale": 1.18, "speed": Vector2(124, 82),
+	&"boss": {"skin": Skins.BOSS, "hp": 210, "scale": 1.18, "speed": Vector2(124, 82),
 		"weight": 1.5, "points": 5000, "attacks": [[&"g_schlag", 3], [&"g_tritt", 2], [&"g_hammer", 1]], "reach": 52.0,
 		"pause": Vector2(0.35, 0.95), "combo": 0.5, "ram": true},
 }
@@ -46,7 +46,7 @@ static func create(type: StringName) -> Enemy:
 	var e := Enemy.new()
 	e.type_id = type
 	e.data = TYPES[type]
-	e.body_color = e.data["color"]
+	e.skin = e.data["skin"]
 	e.team = 1
 	e.max_health = e.data["hp"]
 	e.body_scale = e.data["scale"]

@@ -1,13 +1,11 @@
 class_name Level
 extends Node2D
-## Einfacher Hintergrund: Himmel, Skyline, Strasse mit Spurlinien.
+## Hintergrund in drei Ebenen (Parallax): Himmel steht still, Skyline scrollt langsamer, Häuser und Strasse
+## scrollen mit der Kamera. Die Ebenen werden einmal gemalt und für alle weiteren Runden aufbewahrt.
 
 const WIDTH := 5400.0
 const HEIGHT := 540.0
-const STREET_TOP := 290.0
-
-func _ready() -> void:
-	z_index = -4000
+const NEAR_CHUNK := 1800     # Stücke statt einer einzigen 5400 Pixel breiten Textur (Grenze auf manchen Geräten)
 
 ## (Art, x, z) – z ist der Fusspunkt (Port von `REQUISITEN_PLAN`)
 const PROP_PLAN := [
@@ -19,25 +17,78 @@ const PROP_PLAN := [
 	[&"barrel", 5000, 360], [&"lamp", 5300, 330],
 ]
 
+static var _textures := {}          # Schlüssel -> ImageTexture, bleibt über Runden hinweg
+static var _painted_headless := false
+
+var _sky: Sprite2D
+var _far: Sprite2D
+
+func _ready() -> void:
+	z_index = -4000
+	process_priority = 100      # nach der Kamera, sonst hinkt die Parallaxe ein Bild hinterher
+	_sky = _add_sprite("sky", 0.0, self)
+	_far = _add_sprite("far", 0.0, self)
+	var chunks := int(WIDTH) / NEAR_CHUNK
+	for i in chunks:
+		_add_sprite("near%d" % i, float(i * NEAR_CHUNK), self)
+	if _textures.is_empty():
+		_paint_all(chunks)
+
+func _process(_delta: float) -> void:
+	var camera := get_viewport().get_camera_2d()
+	if camera == null:
+		return
+	var left := camera.global_position.x - LevelPainter.SCREEN_W * 0.5
+	_sky.position.x = left
+	_far.position.x = left - left * LevelPainter.PARALLAX
+
 func lane_bounds() -> Rect2:
 	return Rect2(40.0, 322.0, WIDTH - 80.0, 200.0)
 
-func _draw() -> void:
-	draw_rect(Rect2(0, 0, WIDTH, STREET_TOP), Color(0.55, 0.7, 0.9))
-	# Skyline in zwei Ebenen
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for layer in 2:
-		var x := 0.0
-		var col := Color(0.35, 0.4, 0.55).lerp(Color(0.5, 0.55, 0.7), layer)
-		while x < WIDTH:
-			var w := rng.randf_range(70.0, 140.0)
-			var h := rng.randf_range(80.0, 190.0) - layer * 30.0
-			draw_rect(Rect2(x, STREET_TOP - h, w, h), col)
-			x += w + 4.0
-	draw_rect(Rect2(0, STREET_TOP, WIDTH, HEIGHT - STREET_TOP), Color(0.32, 0.32, 0.35))
-	draw_rect(Rect2(0, STREET_TOP, WIDTH, 14), Color(0.55, 0.55, 0.58))
-	var y := 340.0
-	while y < HEIGHT:
-		draw_line(Vector2(0, y), Vector2(WIDTH, y), Color(1, 1, 1, 0.08), 2.0)
-		y += 50.0
+func _add_sprite(key: String, x: float, parent: Node) -> Sprite2D:
+	var sprite := Sprite2D.new()
+	sprite.name = key
+	sprite.centered = false
+	sprite.position.x = x
+	sprite.texture = _textures.get(key)
+	parent.add_child(sprite)
+	return sprite
+
+func _paint_all(chunks: int) -> void:
+	var headless := DisplayServer.get_name() == "headless"
+	if headless and _painted_headless:
+		return
+	_painted_headless = headless
+	var jobs := [
+		["sky", LevelPainter.Layer.SKY, 0, LevelPainter.SCREEN_W, LevelPainter.SCREEN_H],
+		["far", LevelPainter.Layer.FAR, 0, LevelPainter.FAR_WIDTH, LevelPainter.HOUSE_BOTTOM],
+	]
+	for i in chunks:
+		jobs.append(["near%d" % i, LevelPainter.Layer.NEAR, i * NEAR_CHUNK, NEAR_CHUNK, LevelPainter.SCREEN_H])
+	var viewports := []
+	for job in jobs:
+		var viewport := SubViewport.new()
+		viewport.size = Vector2i(job[3], job[4])
+		viewport.transparent_bg = true
+		viewport.disable_3d = true
+		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		var painter := LevelPainter.new()
+		painter.layer = job[1]
+		painter.x_from = job[2]
+		painter.x_to = job[2] + job[3]
+		viewport.add_child(painter)
+		add_child(viewport)
+		viewports.append(viewport)
+		if not headless:
+			(get_node(String(job[0])) as Sprite2D).texture = viewport.get_texture()
+	if headless:
+		await get_tree().process_frame
+		await get_tree().process_frame
+	else:
+		await RenderingServer.frame_post_draw
+		for i in jobs.size():
+			var key: String = jobs[i][0]
+			_textures[key] = ImageTexture.create_from_image(viewports[i].get_texture().get_image())
+			(get_node(key) as Sprite2D).texture = _textures[key]
+	for viewport in viewports:
+		viewport.queue_free()

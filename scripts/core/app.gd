@@ -57,7 +57,6 @@ func show_menu() -> void:
 	_add_backdrop()
 	var menu := MenuScreen.new()
 	menu.save = save
-	menu.dim = 0.55
 	menu.start_requested.connect(start_game)
 	menu.music_requested.connect(toggle_music)
 	_set_screen(menu)
@@ -104,12 +103,17 @@ func _on_run_ended(won: bool) -> void:
 	get_tree().paused = true
 	mode = Mode.RESULT
 	game.hud.message = ""
+	game.hud.banner_time = 0.0
+	game.hud.go_time = 0.0
+	game.hud.queue_redraw()
 	var result := ResultScreen.new()
 	result.won = won
 	result.player_count = game.fighters.size()
 	for i in game.fighters.size():
-		result.lines.append("%dP %s:  %d" % [i + 1, game.hud.names[i], game.fighters[i].score])
-		result.total += game.fighters[i].score
+		var f := game.fighters[i]
+		result.lines.append("%dP %s:  %d   ·   Beste Combo %d" % [i + 1, f.skin["name"], f.score, f.best_combo])
+		result.skins.append(f.skin)
+		result.total += f.score
 	result.new_record = save.submit(result.player_count, result.total)
 	result.best = save.best(result.player_count)
 	result.play_time = game.play_time

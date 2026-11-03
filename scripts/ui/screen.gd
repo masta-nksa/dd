@@ -3,19 +3,19 @@ extends Control
 ## Grundlage für Menü, Pause und Endbildschirm: abgedunkelter Hintergrund, Texte und Knöpfe untereinander.
 ## Knöpfe sind echte `Button`, dadurch gehen Maus, Tastatur und Controller ohne eigene Logik.
 
-const YELLOW := Color(1.0, 0.85, 0.3)
-const RED := Color(0.95, 0.3, 0.25)
-const LIGHT := Color(0.94, 0.93, 0.96)
-const GRAY := Color(0.68, 0.68, 0.74)
+const YELLOW := Art.YELLOW
+const RED := Art.RED
+const LIGHT := Art.TEXT
+const GRAY := Art.GRAY
 
-var dim := 0.65
+var dim := 0.63
 var buttons: Array[Button] = []
 var _box: VBoxContainer
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var shade := ColorRect.new()
-	shade.color = Color(0.05, 0.04, 0.1, dim)
+	shade.color = Color8(8, 6, 18, int(dim * 255.0))
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -23,7 +23,7 @@ func _ready() -> void:
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_box = VBoxContainer.new()
-	_box.add_theme_constant_override("separation", 8)
+	_box.add_theme_constant_override("separation", 6)
 	center.add_child(_box)
 	_build()
 	focus_first()
@@ -36,15 +36,27 @@ func focus_first() -> void:
 	if not buttons.is_empty():
 		buttons[0].grab_focus()
 
-func add_text(text: String, font_size := 18, color := LIGHT) -> Label:
+## Grösse wie im Original (siehe `Art.font_size`).
+func add_text(text: String, size := 24.0, color := LIGHT, parent: Container = null) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	label.add_theme_constant_override("outline_size", 4 if font_size >= 30 else 0)
-	_box.add_child(label)
+	var settings := LabelSettings.new()
+	settings.font = Art.font()
+	settings.font_size = Art.font_size(size)
+	settings.font_color = color
+	settings.outline_color = Art.OUTLINE
+	settings.outline_size = maxi(2, int(size) / 8)
+	label.label_settings = settings
+	(parent if parent != null else _box).add_child(label)
+	return label
+
+## Grosser Titel mit Schatten wie im Original.
+func add_title(text: String, size: float, color := YELLOW) -> Label:
+	var label := add_text(text, size, color)
+	label.label_settings.shadow_color = Art.TITLE_SHADOW
+	label.label_settings.shadow_offset = Vector2(4.0, 5.0)
+	label.label_settings.shadow_size = 1
 	return label
 
 func add_gap(height: float) -> void:
@@ -52,17 +64,43 @@ func add_gap(height: float) -> void:
 	gap.custom_minimum_size = Vector2(0.0, height)
 	_box.add_child(gap)
 
+## Dunkler Kasten für mehrere Textzeilen; gibt den Behälter für `add_text` zurück.
+func add_panel() -> VBoxContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color8(10, 8, 20, 190)
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(10.0)
+	panel.add_theme_stylebox_override("panel", style)
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 1)
+	panel.add_child(inner)
+	_box.add_child(panel)
+	return inner
+
+func add_hero(skin: Dictionary, color: Color, at: Vector2, facing := 1, figure_scale := 2.2) -> HeroFigure:
+	var hero := HeroFigure.new()
+	hero.skin = skin
+	hero.color = color
+	hero.facing = facing
+	hero.figure_scale = figure_scale
+	hero.position = at
+	add_child(hero)
+	return hero
+
 func add_button(text: String, action: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
-	button.custom_minimum_size = Vector2(280.0, 38.0)
+	button.custom_minimum_size = Vector2(280.0, 34.0)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	button.add_theme_font_size_override("font_size", 20)
-	button.add_theme_stylebox_override("normal", _style(Color(0.14, 0.13, 0.22, 0.95), Color(0.35, 0.33, 0.45)))
-	button.add_theme_stylebox_override("hover", _style(Color(0.22, 0.2, 0.33), Color(0.55, 0.52, 0.68)))
-	button.add_theme_stylebox_override("pressed", _style(Color(0.45, 0.35, 0.1), YELLOW))
+	button.add_theme_font_override("font", Art.font())
+	button.add_theme_font_size_override("font_size", 19)
+	button.add_theme_stylebox_override("normal", _style(Color8(20, 18, 34, 235), Color8(90, 84, 115)))
+	button.add_theme_stylebox_override("hover", _style(Color8(50, 44, 76), Color8(140, 132, 175)))
+	button.add_theme_stylebox_override("pressed", _style(Color8(115, 90, 25), YELLOW))
 	button.add_theme_stylebox_override("focus", _style(Color(0, 0, 0, 0), YELLOW))
-	button.add_theme_stylebox_override("disabled", _style(Color(0.1, 0.1, 0.14, 0.8), Color(0.2, 0.2, 0.26)))
+	button.add_theme_stylebox_override("disabled", _style(Color8(25, 25, 35, 200), Color8(50, 50, 66)))
 	button.pressed.connect(func(): SoundBank.play(&"grab"))
 	button.pressed.connect(action)
 	_box.add_child(button)
@@ -74,5 +112,5 @@ func _style(fill: Color, border: Color) -> StyleBoxFlat:
 	style.bg_color = fill
 	style.border_color = border
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(5)
+	style.set_corner_radius_all(6)
 	return style

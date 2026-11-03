@@ -161,6 +161,7 @@ func _init() -> void:
 	app.game.fighters[0].score = 300
 	app.game.fighters[1].score = 200
 	for g in app.game.fighters:
+		g.lives = 0
 		g.current_health = 0
 	await frames(60 * 2 + 10)
 	pruefe(app.mode == App.Mode.RESULT and not (app.screen as ResultScreen).won, "Alle tot: Game Over")
@@ -172,6 +173,7 @@ func _init() -> void:
 	app.start_game(false)
 	await frames(3)
 	app.game.fighters[0].score = 100
+	app.game.fighters[0].lives = 0
 	app.game.fighters[0].current_health = 0
 	await frames(60 * 2 + 10)
 	pruefe(not (app.screen as ResultScreen).new_record and app.save.best(1) == 1200, "Schlechterer Lauf ist kein Rekord")

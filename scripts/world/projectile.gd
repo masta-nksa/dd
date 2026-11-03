@@ -81,18 +81,15 @@ func _land() -> void:
 	var x := items.clamp_to_screen(pos_x)
 	if carry.rest > 0:
 		items.spawn_weapon(carry.kind, carry.rest, x, pos_z, 10.0, false)
-		items.effects.debris(x, pos_z, 4.0, [Color(0.7, 0.6, 0.45)], 3)
+		items.effects.debris(x, pos_z, 4.0, [Art.lighter(WeaponPickup.WOOD)], 3)
 	else:
-		items.effects.debris(x, pos_z, 10.0, [Color(0.70, 0.49, 0.27), Color(0.47, 0.34, 0.19)], 10)
+		items.effects.debris(x, pos_z, 10.0, [WeaponPickup.WOOD, Art.darker(WeaponPickup.WOOD)], 10)
 
 func _draw() -> void:
-	var pts := PackedVector2Array()
-	for i in 16:
-		var a := TAU * i / 16.0
-		pts.append(Vector2(cos(a) * 20.0, pos_y + sin(a) * 6.0))
-	draw_colored_polygon(pts, Color(0, 0, 0, 0.3))
 	if carry.heavy:
+		Art.shadow(self, 0.0, pos_y + 2.0, maxf(18.0, carry.prop.width * 1.1 / (1.0 + pos_y / 120.0)))
 		Prop.draw_art(self, carry.kind, carry.prop.width, carry.prop.height, carry.prop.color, 1.0, Vector2(0, 6))
 	else:
+		Art.shadow(self, 0.0, pos_y + 2.0, 44.0 / (1.0 + pos_y / 120.0))
 		var d := Vector2(cos(_spin), sin(_spin)) * 28.0
 		WeaponPickup.draw_bat(self, Vector2(0, -7) - d, Vector2(0, -7) + d, carry.ratio())

@@ -21,7 +21,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 4. Gegner-KI (FSM), vier Typen, Boss, Wellen, Level mit Parallax
 5. Waffen Stufe 1 (Greifen, Werfen, Schläger, Kisten, Drops)
 6. Töne, HUD, Game-Over/Sieg, Rekord
-7. Kämpferwahl (Kai, Ria, Bruno, Mika), danach feinere Grafik (Sprites)
+7. Kämpferwahl (Bruce, Chuck, Jackie, JCVD, zusätzlich Kai, Ria, Bruno, Mika; Modelle aus `tools/blender/build_fighter.py`), danach feinere Grafik (Sprites)
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
@@ -55,10 +55,21 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Tests: 44 Prüfungen in `stufe6_test.gd`. Im Browser geprüft: Start, Menü, Spielstart, Pause, Speichern über einen Neuladen. Von Hand zu prüfen: Klang der Töne, echtes Gamepad. Nicht portiert: Rumble, Einsteigen mitten im Spiel.
 - Die Warnung «ObjectDB instances leaked» am Ende von `stufe6_test.gd` kommt von Tonobjekten, die beim sofortigen Beenden noch spielen.
 
+## Grafik-Port – Aufbau
+- Anlass: Die Stufen 2 bis 6 hatten nur Platzhalter-Grafik. Portiert ist jetzt der Zeichencode des Originals, die Trefferboxen und Kampfwerte sind unverändert.
+- `scripts/art/`: `Art` (Farben, Kapseln, Schatten, Text), `Skins` (Aussehen), `Poses` (Gelenkwinkel), `FigureArt` (Skelett-Figur), `LevelPainter` (Himmel, Skyline, Altstadt, Industrie, Hafen, Strasse).
+- `Level`: drei Ebenen mit Parallaxe, einmal über `SubViewport` in Texturen gemalt und statisch aufbewahrt; die Strasse in drei Stücken zu 1800 Pixeln. Der Zufall ist fest, aber nicht derselbe wie in Python, die Häuser stehen also anders als im Original.
+- `Effects`: Funke, Splitter, Staub, Schwebetext. `CameraRig.shake()`: Bildschirmwackeln.
+- `Hud`: Felder mit `Portrait`, Balken mit Nachlaufspur, Herzen, Combo, Gegner- und Boss-Balken. `HeroFigure`: grosse Figuren in Menü und Endbildschirm.
+- Neu im Spiel: 2 Extraleben (`Fighter.lives`, Einsteigen von oben, 2,5 s unverwundbar), Combos und Punkte pro Treffer (`count_hit`). Das macht das Spiel leichter als in den Balance-Messungen von Stufe 4 beschrieben.
+- Tests: `grafik_test.gd`. Das Aussehen selbst prüfen nur Screenshots neben dem Original.
+- Die Spielerfiguren werden noch mit neuen Blender-Modellen überarbeitet; bis dahin zeichnet `FigureArt` sie in 2D wie im Original.
+
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
 - Host-autoritativ: ein Client simuliert die Welt, der andere sendet Eingaben; Client-Prediction nur für die eigene Figur, getrennt vom Spielzustand.
 - Offene Fragen: Latenz-Toleranz, Wiederverbinden, Spielerzahl (nur 2?).
 
 ## Nächste Schritte
-- Stufe 7: Kämpferwahl (Kai, Ria, Bruno, Mika), danach feinere Grafik.
+- Neue Blender-Figuren abwarten, dann entscheiden, wie sie ins Spiel kommen.
+- Stufe 7: Kämpferwahl (Bruce, Chuck, Jackie, JCVD, zusätzlich Kai, Ria, Bruno, Mika).

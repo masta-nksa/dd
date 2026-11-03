@@ -10,7 +10,7 @@ enum State { IDLE, WALK, JUMP, ATTACK, HIT, KNOCKDOWN, GETUP, DEAD, GRAB }
 
 static var debug_boxes := false
 
-@export var body_color := Color(0.2, 0.45, 0.9)
+@export var body_color := Art.PLAYER_COLORS[0]   # Farbe von Ring, Anzeige und Hinweisen
 @export var team := 0
 @export var max_health := 100
 @export var speed_x := 175.0
@@ -25,6 +25,20 @@ const REQUEST_WINDOW := 0.25
 const HITSTOP := 0.07
 const LIE_TIME := 0.7
 const GETUP_TIME := 0.4
+const RESPAWN_DELAY := 1.6
+const RESPAWN_HEIGHT := 330.0
+const RESPAWN_SAFE_TIME := 2.5
+const COMBO_TIME := 1.2
+
+var skin: Dictionary = Skins.KAI
+var player_number := 0     # 0 = Gegner; 1 oder 2 zeichnet Ring und Kennzeichen
+var lives := 0             # Extraleben
+var camera: CameraRig = null   # hier taucht man nach einem verlorenen Leben wieder auf
+var cheer := false         # jubelt nach dem Sieg
+var combo := 0
+var best_combo := 0
+var _combo_time := 0.0
+var _invulnerable_time := 0.0
 
 var current_health := 100
 var pos_x := 0.0
@@ -91,10 +105,14 @@ func is_carrying_heavy() -> bool:
 	return carried != null and carried.heavy
 
 func is_invulnerable() -> bool:
-	return state == State.KNOCKDOWN or state == State.GETUP or state == State.DEAD
+	return _invulnerable_time > 0.0 or state == State.KNOCKDOWN or state == State.GETUP or state == State.DEAD
 
 func is_dead() -> bool:
 	return state == State.DEAD
+
+## Endgültig ausgeschieden: keine Lebenspunkte und keine Extraleben mehr.
+func is_out() -> bool:
+	return current_health <= 0 and lives <= 0
 
 func revive() -> void:
 	current_health = max_health
@@ -106,6 +124,11 @@ func revive() -> void:
 # ---------------------------------------------------------------- Aktualisierung
 
 func _physics_process(delta: float) -> void:
+	_invulnerable_time = maxf(_invulnerable_time - delta, 0.0)
+	if _combo_time > 0.0:
+		_combo_time -= delta
+		if _combo_time <= 0.0:
+			combo = 0
 	if _freeze_time > 0.0:      # Trefferpause: kurz einfrieren
 		_freeze_time -= delta
 		return
@@ -123,7 +146,7 @@ func _physics_process(delta: float) -> void:
 		State.HIT: _tick_hit(delta)
 		State.KNOCKDOWN: _tick_knockdown(delta)
 		State.GETUP: _tick_getup()
-		State.DEAD: _slide(delta)
+		State.DEAD: _tick_dead(delta)
 		State.GRAB: _tick_grab(delta)
 
 	_jump_requested = false
@@ -159,6 +182,9 @@ func _fall(delta: float) -> bool:
 	return false
 
 func _tick_ground(delta: float) -> void:
+	if cheer:
+		state = State.IDLE
+		return
 	if _grab_requested and _try_grab():
 		return
 	if _jump_requested and not is_carrying_heavy():
@@ -178,6 +204,7 @@ func _tick_jump(delta: float) -> void:
 		start_attack(&"jump_kick")
 		return
 	if _fall(delta):
+		_dust(3)
 		_set_state(State.IDLE)
 
 func _start_requested_attack() -> bool:
@@ -262,10 +289,43 @@ func _tick_knockdown(delta: float) -> void:
 		if _fall(delta):
 			_landed = true
 			SoundBank.play(&"thud")
+			_dust(6)
+			if items != null and items.camera != null:
+				items.camera.shake(4.0 * weight)
 			_state_time = 0.0
 			vel_x *= 0.5
 	elif _state_time >= LIE_TIME:
 		_set_state(State.DEAD if current_health <= 0 else State.GETUP)
+
+func _tick_dead(delta: float) -> void:
+	_slide(delta)
+	if lives > 0 and _state_time >= RESPAWN_DELAY:
+		lives -= 1
+		_respawn()
+
+## Fällt von oben ins Bild, kurz unverwundbar (Port von `einsteigen`).
+func _respawn() -> void:
+	if camera != null:
+		pos_x = camera.position.x - CameraRig.HALF_WIDTH + 960.0 * (0.3 if player_number == 1 else 0.6)
+	pos_z = bounds.get_center().y + (player_number - 1.5) * 40.0
+	pos_y = RESPAWN_HEIGHT
+	velocity_y = 0.0
+	vel_x = 0.0
+	current_health = max_health
+	_invulnerable_time = RESPAWN_SAFE_TIME
+	facing = 1
+	_set_state(State.JUMP)
+
+func _dust(count: int) -> void:
+	if items != null:
+		items.effects.dust(pos_x, pos_z, count)
+
+## Ein eigener Treffer zählt für Combo und Punkte (Port von `zaehle_treffer`).
+func count_hit(a: AttackData) -> void:
+	combo += 1
+	_combo_time = COMBO_TIME
+	best_combo = maxi(best_combo, combo)
+	score += a.damage * 10 + (combo - 1) * 5
 
 func _tick_getup() -> void:
 	if _state_time >= GETUP_TIME:
@@ -320,8 +380,8 @@ func break_weapon() -> void:
 	SoundBank.play(&"crack")
 	if items != null:
 		items.effects.debris(pos_x + facing * 40.0, pos_z, 60.0,
-			[Color(0.70, 0.49, 0.27), Color(0.47, 0.34, 0.19), Color(0.88, 0.72, 0.47)], 16)
-		items.effects.text(pos_x, pos_z, 110.0, "KAPUTT!", Color(1.0, 0.3, 0.3))
+			[WeaponPickup.WOOD, Art.darker(WeaponPickup.WOOD), Art.lighter(WeaponPickup.WOOD)], 16)
+		items.effects.text(pos_x, pos_z, 110.0, "KAPUTT!", Art.RED)
 	carried = null
 	_request = &""
 
@@ -385,111 +445,69 @@ func _apply_position() -> void:
 	position = Vector2(pos_x, pos_z - pos_y)
 	z_index = int(pos_z)
 
+## Passende Pose zum Zustand (Port von `aktuelle_pose`).
+func current_pose() -> Dictionary:
+	match state:
+		State.ATTACK:
+			if attack == null:
+				return Poses.stand(_anim_time)
+			var total := attack.total_time()
+			var t := attack_time / total
+			if t >= 1.0 and pos_y > 0.0:
+				return Poses.jump()
+			return Poses.attack(attack.pose, minf(t, 1.0), attack.startup / total, (attack.startup + attack.active) / total)
+		State.WALK:
+			return Poses.carry(Poses.walk(_anim_time)) if is_carrying_heavy() else Poses.walk(_anim_time)
+		State.JUMP:
+			return Poses.jump()
+		State.HIT:
+			return Poses.hit(_state_time)
+		State.KNOCKDOWN:
+			return Poses.lying() if _landed else Poses.fall(minf(_state_time / 0.45, 1.0))
+		State.DEAD:
+			return Poses.lying()
+		State.GETUP:
+			return Poses.get_up(_state_time / GETUP_TIME)
+		State.GRAB:
+			return Poses.bend()
+	if cheer:
+		return Poses.cheer(_anim_time)
+	return Poses.carry(Poses.stand(_anim_time)) if is_carrying_heavy() else Poses.stand(_anim_time)
+
+func _is_blinked_out() -> bool:
+	if state == State.DEAD:
+		return (is_out() and _state_time >= RESPAWN_DELAY) or int(_state_time * 14.0) % 2 == 1
+	return _invulnerable_time > 0.5 and int(_anim_time * 16.0) % 2 == 1
+
 func _draw() -> void:
-	var k := body_scale
-	var s := clampf(1.0 - pos_y / 400.0, 0.4, 1.0) * k
-	var pts := PackedVector2Array()
-	for i in 20:
-		var ang := TAU * i / 20.0
-		pts.append(Vector2(cos(ang) * 26.0 * s, pos_y + sin(ang) * 8.0 * s))
-	draw_colored_polygon(pts, Color(0, 0, 0, 0.35))
-
-	self_modulate = Color(2.2, 2.2, 2.2) if _flash_time > 0.0 else Color.WHITE
-	if state == State.DEAD and int(_anim_time * 10.0) % 2 == 0 and _state_time > 0.8:
-		self_modulate = Color(1, 1, 1, 0.4)
-
-	var f := float(facing)
-	var offset := Vector2.ZERO
-	var angle := 0.0
-	if state == State.KNOCKDOWN or state == State.DEAD or state == State.GETUP:
-		angle = -f * PI * 0.5
-		offset = Vector2(0, -6 * k)
-		if state == State.KNOCKDOWN and not _landed:
-			angle = -f * PI * 0.3
-		elif state == State.GETUP:
-			angle = -f * PI * 0.5 * (1.0 - _state_time / GETUP_TIME)
-	elif state == State.HIT:
-		angle = -f * 0.18
-	elif state == State.GRAB:
-		angle = f * 0.45
-	draw_set_transform(offset, angle, Vector2(k, k))
-	_draw_figure(f)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	_draw_health_bar()
+	# Der Schatten bleibt am Boden, auch wenn die Figur springt; so sieht man die Tiefe.
+	var lying_down := state == State.DEAD or (state == State.KNOCKDOWN and _landed)
+	if not (is_out() and state == State.DEAD and _state_time >= RESPAWN_DELAY):
+		Art.shadow(self, 0.0, pos_y, 46.0 * body_scale / (1.0 + pos_y / 160.0) * (2.1 if lying_down else 1.0))
+	if player_number > 0 and state != State.KNOCKDOWN and state != State.DEAD:
+		Art.player_ring(self, 0.0, pos_y, 50.0, body_color, facing)
+	if not _is_blinked_out():
+		var jitter := 0.0
+		if _flash_time > 0.0:   # zittert beim Treffer
+			jitter = 2.0 if int(_flash_time * 120.0) % 2 == 0 else -2.0
+		FigureArt.draw(self, skin, current_pose(), jitter, 0.0, facing, body_scale, _flash_time > 0.06, _anim_time,
+			_hold_carried if carried != null else Callable())
+		if player_number > 0 and not lying_down:
+			Art.text(self, "%dP" % player_number, 20.0, Vector2(0.0, -FigureArt.HEIGHT * body_scale - 14.0), body_color)
 	if debug_boxes:
 		_draw_debug()
 
-func _draw_figure(f: float) -> void:
-	var bob := 0.0
-	var step := 0.0
-	if state == State.WALK:
-		step = sin(_anim_time * 12.0)
-		bob = absf(step) * 2.0
-	var skin := Color(0.95, 0.8, 0.65)
-	var dark := body_color.darkened(0.45)
-	var pose: StringName = attack.pose if attack != null else &""
-	var phase := 0.0   # 0 = Anlauf, 1 = aktiv, 2 = Erholung
-	if attack != null:
-		phase = 0.0 if attack_time < attack.startup else (1.0 if attack_time < attack.startup + attack.active else 2.0)
-
-	# Beine
-	var kick_leg := pose == &"kick" and phase == 1.0
-	draw_rect(Rect2(-9 + step * 4.0, -34, 8, 34), dark)
-	if kick_leg:
-		draw_rect(Rect2(f * 6 - (0 if f > 0 else 44), -34, 44, 9), dark)
-	else:
-		draw_rect(Rect2(1 - step * 4.0, -34, 8, 34 if state != State.JUMP else 24), dark)
-	# Oberkörper
-	draw_rect(Rect2(-13, -72 + bob, 26, 40), body_color)
-	draw_rect(Rect2(-13, -38 + bob, 26, 4), body_color.darkened(0.6))
-	# Arme
-	var winding_up := pose == &"punch" and phase == 0.0 and attack.startup >= 0.15
-	var punch_arm := (pose == &"punch" and phase == 1.0) or (pose == &"throw" and phase >= 1.0)
-	if winding_up:
-		draw_rect(Rect2(f * 10 - 4, -96, 8, 30), skin)
-	elif punch_arm:
-		var length := 44.0
-		draw_rect(Rect2(f * 10 - (0 if f > 0 else length), -68, length, 9), skin)
-	else:
-		draw_rect(Rect2(f * 12 - 4, -70 + bob, 8, 28), skin)
-	if pose == &"spin" and phase == 1.0:
-		draw_arc(Vector2(0, -50), 58.0, 0.0, TAU, 32, Color(1, 1, 1, 0.6), 4.0)
-	else:
-		draw_rect(Rect2(-f * 12 - 4, -70 + bob, 8, 28), skin.darkened(0.15))
-	_draw_carried(f, phase, pose, bob)
-	# Kopf
-	draw_circle(Vector2(0, -86 + bob), 12.0, skin)
-	draw_arc(Vector2(0, -88 + bob), 12.5, PI, TAU, 16, Color(0.15, 0.1, 0.1), 5.0)
-	draw_circle(Vector2(f * 5, -86 + bob), 1.8, Color.BLACK)
-
-func _draw_carried(f: float, phase: float, pose: StringName, bob: float) -> void:
-	if carried == null:
-		return
+## Zeichnet das Getragene in die Hände (Port von `zeichne_in_hand`).
+func _hold_carried(hand: Vector2, elbow: Vector2, other_hand: Vector2, _other_elbow: Vector2, s: float) -> void:
 	if carried.heavy:
-		var rect_origin := Vector2(0, -88 + bob)
-		Prop.draw_art(self, carried.kind, carried.prop.width, carried.prop.height, carried.prop.color, 1.0, rect_origin)
+		var prop := carried.prop
+		Prop.draw_art(self, carried.kind, prop.width, prop.height, prop.color, 1.0, ((hand + other_hand) * 0.5 - Vector2(0.0, 2.0)).round())
 		return
-	var hand := Vector2(f * 14.0, -52.0 + bob)
-	var dir := Vector2(f * 0.35, -1.0)            # in Ruhe schräg nach oben
-	if pose == &"swing":
-		if phase == 0.0:
-			dir = Vector2(-f * 0.6, -1.0)         # ausholen
-		elif phase == 1.0:
-			dir = Vector2(f, 0.1)                 # Schwung nach vorn
-		else:
-			dir = Vector2(f * 0.6, 0.8)           # ausschwingen
-	var grip := hand - dir.normalized() * 8.0
-	var tip := hand + dir.normalized() * 52.0
-	WeaponPickup.draw_bat(self, grip, tip, carried.ratio())
-
-func _draw_health_bar() -> void:
-	if state == State.DEAD:
-		return
-	var w := 44.0
-	var ratio := float(current_health) / float(max_health)
-	var top := -112.0 * body_scale
-	draw_rect(Rect2(-w * 0.5, top, w, 5), Color(0, 0, 0, 0.6))
-	draw_rect(Rect2(-w * 0.5, top, w * ratio, 5), Color(0.3, 0.9, 0.3).lerp(Color(0.95, 0.2, 0.2), 1.0 - ratio))
+	var along := (hand - elbow).normalized()
+	var tip := hand + along * 52.0 * s
+	if carried.ratio() < 0.25:   # wackelt, wenn er fast kaputt ist
+		tip += Vector2(sin(_anim_time * 53.0), cos(_anim_time * 41.0))
+	WeaponPickup.draw_bat(self, hand - along * 8.0 * s, tip, carried.ratio(), s)
 
 func _draw_debug() -> void:
 	var origin := Vector2(pos_x, pos_z - pos_y)

@@ -10,14 +10,28 @@ var keep_players_on_screen := true   # Spieler können den Bildrand nicht verlas
 const HALF_WIDTH := 480.0
 const MARGIN := 24.0
 
+var _shake := 0.0
+var _rng := RandomNumberGenerator.new()
+
+## Bildschirmwackeln, klingt schnell ab.
+func shake(strength: float) -> void:
+	_shake = maxf(_shake, strength)
+
 func _ready() -> void:
 	limit_left = 0
 	limit_right = int(Level.WIDTH)
 	limit_top = 0
 	limit_bottom = int(Level.HEIGHT)
+	_rng.randomize()
 	make_current()
 
 func _process(delta: float) -> void:
+	if _shake > 0.3:
+		offset = Vector2(_rng.randf_range(-1.0, 1.0), _rng.randf_range(-0.6, 0.6)) * _shake
+		_shake *= maxf(0.0, 1.0 - delta * 12.0)
+	else:
+		_shake = 0.0
+		offset = Vector2.ZERO
 	if targets.is_empty():
 		return
 	var sum := 0.0

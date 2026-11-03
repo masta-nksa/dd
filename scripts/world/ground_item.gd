@@ -42,17 +42,12 @@ func is_visible_now() -> bool:
 	return not (age > lifetime - 3.0 and int(age * 10.0) % 2 == 1)
 
 func _draw() -> void:
-	draw_colored_polygon(_shadow(), Color(0, 0, 0, 0.3))
+	Art.shadow(self, 0.0, pos_y + 2.0, shadow_width())
 	if is_visible_now():
 		draw_item()
 
-func _shadow() -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	var s := 22.0 / (1.0 + pos_y / 120.0)
-	for i in 16:
-		var a := TAU * i / 16.0
-		pts.append(Vector2(cos(a) * s, pos_y + sin(a) * 5.0))
-	return pts
+func shadow_width() -> float:
+	return 26.0 / (1.0 + pos_y / 120.0)
 
 func draw_item() -> void:
 	pass
