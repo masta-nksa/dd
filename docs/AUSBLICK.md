@@ -94,7 +94,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Combos: `AttackData.chains` nennt je Taste den nächsten Angriff, statt `chain_to`. Längste Kette: Schlag, Low Kick, Schlag, High Kick, Schlag. Die Tabelle hat keine Schleifen, das prüft der Test.
 - Trefferwirkung: `hitstop` je Angriff, `hit_level` wählt die Reaktion (`Poses.hit`: oben fliegt der Kopf zurück, unten knickt die Figur ein), Bewegungsspur `trail` an Fuss oder Faust (nur bei 3D-Figuren), stärkerer Funke und Kamerastoss ab `hitstop` 0,1 s.
 - Vorschau: `blender -b -P tools/blender/build_fighter.py -- --fighter bruce --clip-preview` schreibt Bildreihen nach `build/characters_preview/`. Tests: `stufe8_test.gd`.
-- Nicht geprüft: Balance mit den neuen Angriffen, echtes Gamepad mit LB. Bruces `.glb` wuchs durch die Clips von 258 auf rund 400 KB.
+- Online geprüft (2026-11-03): Workflow baut die Clips, im Browser laufen Menü, Wahl von Bruce, Low Kick und High Kick ohne Konsolenfehler. Nicht geprüft: Balance mit den neuen Angriffen, echtes Gamepad mit LB, Bildrate im sichtbaren Browserfenster. Bruces `.glb` wuchs durch die Clips von 258 auf rund 400 KB.
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
