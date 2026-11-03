@@ -15,6 +15,7 @@ const TITLE_SHADOW := Color8(120, 30, 40)
 const PLAYER_COLORS: Array[Color] = [Color8(70, 150, 255), Color8(255, 80, 80)]
 
 static var _font: FontVariation = null
+static var _painted_font: FontVariation = null
 
 static func darker(c: Color, factor := 0.74) -> Color:
 	return Color(c.r * factor, c.g * factor, c.b * factor, c.a)
@@ -70,6 +71,17 @@ static func font() -> Font:
 		_font.variation_embolden = 0.6
 	return _font
 
+## Schrift für Text, der in eine Textur gemalt wird: immer gleich scharf. Sonst richtet sie sich nach der
+## Fenstergrösse beim Malen, und im Browser ist das Fenster anfangs oft noch winzig.
+static func painted_font() -> FontVariation:
+	if _painted_font == null:
+		var base: FontFile = ThemeDB.fallback_font.duplicate()
+		base.oversampling = 1.0
+		_painted_font = FontVariation.new()
+		_painted_font.base_font = base
+		_painted_font.variation_embolden = 0.6
+	return _painted_font
+
 ## Pygame-Schriftgrössen sind höher als Godot-Grössen; so bleiben die Zahlen aus dem Original gültig.
 static func font_size(size: float) -> int:
 	return maxi(8, roundi(size * 0.72))
@@ -78,8 +90,8 @@ static func text_size(text_value: String, size: float) -> Vector2:
 	return font().get_string_size(text_value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(size))
 
 ## Text mit Umriss. size ist die Grösse wie im Original.
-static func text(ci: CanvasItem, text_value: String, size: float, pos: Vector2, color := TEXT, anchor := Anchor.CENTER, outlined := true) -> void:
-	var f := font()
+static func text(ci: CanvasItem, text_value: String, size: float, pos: Vector2, color := TEXT, anchor := Anchor.CENTER, outlined := true, use_font: Font = null) -> void:
+	var f: Font = use_font if use_font != null else font()
 	var fs := font_size(size)
 	var dim := f.get_string_size(text_value, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
 	var top_left := pos

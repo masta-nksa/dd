@@ -44,6 +44,7 @@ func _init() -> void:
 
 	# 3) Level: Zonen, Ebenen, Parallaxe
 	pruefe(LevelPainter.zone_at(100.0) == &"old_town" and LevelPainter.zone_at(2000.0) == &"industry" and LevelPainter.zone_at(5000.0) == &"harbour", "Drei Zonen")
+	pruefe((Art.painted_font().base_font as FontFile).oversampling == 1.0, "Gemalter Text hängt nicht von der Fenstergrösse ab")
 	var szene: Main = await neue_szene(false)
 	var f: Fighter = szene.fighters[0]
 	var d: Fighter = szene.dummy

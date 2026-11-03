@@ -112,7 +112,7 @@ func _ellipse_ring(x: float, y: float, w: float, h: float, c: Color, t := 2.0) -
 func _text(value: String, size: float, pos: Vector2, c: Color, anchor := Art.Anchor.CENTER, outlined := true) -> void:
 	var half := Art.text_size(value, size).x * 0.5 + 4.0
 	if _visible(pos.x - half, pos.x + half):
-		Art.text(self, value, size, pos, c, anchor, outlined)
+		Art.text(self, value, size, pos, c, anchor, outlined, Art.painted_font())
 
 # ------------------------------------------------------------ Himmel
 
@@ -176,7 +176,7 @@ func _paint_graffiti(x: float, y: float) -> void:
 	if not _visible(x - 90.0, x + 90.0):
 		return
 	draw_set_transform(Vector2(x - x_from, y), angle)
-	Art.text(self, word, size, Vector2.ZERO, color)
+	Art.text(self, word, size, Vector2.ZERO, color, Art.Anchor.CENTER, true, Art.painted_font())
 	_set_origin()
 
 func _paint_old_town(x: int, width: int) -> void:

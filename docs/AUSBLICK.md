@@ -59,6 +59,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Anlass: Die Stufen 2 bis 6 hatten nur Platzhalter-Grafik. Portiert ist jetzt der Zeichencode des Originals, die Trefferboxen und Kampfwerte sind unverändert.
 - `scripts/art/`: `Art` (Farben, Kapseln, Schatten, Text), `Skins` (Aussehen), `Poses` (Gelenkwinkel), `FigureArt` (Skelett-Figur), `LevelPainter` (Himmel, Skyline, Altstadt, Industrie, Hafen, Strasse).
 - `Level`: drei Ebenen mit Parallaxe, einmal über `SubViewport` in Texturen gemalt und statisch aufbewahrt; die Strasse in drei Stücken zu 1800 Pixeln. Der Zufall ist fest, aber nicht derselbe wie in Python, die Häuser stehen also anders als im Original.
+  Text in diesen Texturen nutzt `Art.painted_font()` mit fester Schärfe; die normale Schrift richtet sich nach der Fenstergrösse beim Malen und wurde im Browser unscharf.
 - `Effects`: Funke, Splitter, Staub, Schwebetext. `CameraRig.shake()`: Bildschirmwackeln.
 - `Hud`: Felder mit `Portrait`, Balken mit Nachlaufspur, Herzen, Combo, Gegner- und Boss-Balken. `HeroFigure`: grosse Figuren in Menü und Endbildschirm.
 - Neu im Spiel: 2 Extraleben (`Fighter.lives`, Einsteigen von oben, 2,5 s unverwundbar), Combos und Punkte pro Treffer (`count_hit`). Das macht das Spiel leichter als in den Balance-Messungen von Stufe 4 beschrieben.
