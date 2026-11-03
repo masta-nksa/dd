@@ -80,7 +80,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
   Lokal: `blender -b -P tools/blender/build_fighter.py -- --fighter all --no-blend`, danach `godot --headless --import`.
 - Im Spiel noch 2D: Gegner, HUD-Porträts (2D-Kopf mit demselben Aussehen), Helden in Menü und Endbildschirm (Kai, Ria).
 - Tests: `stufe7_test.gd` (Daten, Wahl mit Sperre, App-Ablauf, Werte im Kampf, Modelle samt Haltung und Handpunkten, je ein Bot-Lauf pro Figur). Die Modell-Prüfungen überspringt der Test ohne `.glb`.
-  Nicht geprüft: Workflow mit Blender auf GitHub, Browser-Export mit den Modellen (Leistung, MSAA im Web), echtes Gamepad in der Wahl.
+  Online geprüft (2026-11-03): Workflow baut die acht `.glb` (Artefakt 314 KB), Wahl und Spielstart mit Bruce und Chuck laufen im Browser. Nicht geprüft: Leistung bei längerem Spiel, Balance, echtes Gamepad in der Wahl. Die Schrift des Spiels hat keine Pfeil-Zeichen (←/→).
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.

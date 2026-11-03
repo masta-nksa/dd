@@ -170,7 +170,7 @@ func _draw_board() -> void:
 		_draw_card(card)
 	var hint := "1P:  A/D wählen · F bestätigen · G zurück"
 	if player_count > 1:
-		hint += "          2P:  ←/→ wählen · K bestätigen · L zurück"
+		hint += "          2P:  Pfeile wählen · K bestätigen · L zurück"
 	Art.text(_board, hint, 18.0, Vector2(480.0, 520.0), Art.GRAY)
 	if _countdown >= 0.0:
 		Art.title(_board, "LOS!", 64.0, Vector2(480.0, 275.0))
