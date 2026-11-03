@@ -25,7 +25,7 @@ func _build() -> void:
 	add_text("K Schlag  ·  L Low Kick  ·  U High Kick  ·  I Spezial", 22.0, Art.PLAYER_COLORS[1], help)
 	add_text("Controller: A Sprung · X Schlag · B Low Kick · LB High Kick · Y Spezial · RB Greifen", 18.0, GRAY, help)
 	add_text("Mit Schläger: Schlag = Schwung · Low-Kick-Taste halten = Abwehr · Spezial = Homerun", 18.0, GRAY, help)
-	add_text("Esc, P, Start Pause  ·  M Musik  ·  F1 Hitboxen", 18.0, GRAY, help)
+	add_text("Esc, P, Start Pause  ·  M Musik  ·  F1 Hitboxen  ·  F2 Bildrate", 18.0, GRAY, help)
 	add_gap(2.0)
 	add_text("Rekord:  1 Spieler %d  ·  2 Spieler %d" % [save.best(1), save.best(2)], 24.0, YELLOW)
 	_add_heroes()

@@ -4,6 +4,9 @@ Aufruf (Blender 5.0):
     blender -b -P tools/blender/build_fighter.py -- --fighter bruce
     blender -b -P tools/blender/build_fighter.py -- --fighter all --preview --verify
 Figuren: FIGHTERS (bruce, chuck, jackie, jcvd) und zusätzlich PLAYERS (kai, ria, bruno, mika).
+Gegner: ENEMIES (thug, dasher, brute, boss) und ENEMY_VARIANTS (thug_cap, dasher_spiky, brute_bare) als assets/characters/enemy_<name>.glb.
+Die Materialien heissen <figur>__<zone> (z. B. thug__top): Das Spiel färbt sie je Gegner um (`ModelFigure.apply_palette`).
+Godot entfernt beim Import Zeichen wie «/» aus Materialnamen, darum steht der Doppelstrich.
 Vorschau (--preview, nach build/characters_preview/): je Figur Front, Seite, Testpose, Tritt (<name>_sheet.png) und
 Gelenke und Kopf (<name>_detail.png), dazu jede Gruppe aus der Spielkamera (roster_<gruppe>.png, ..._ingame.png).
 --verify lädt jede .glb in eine leere Szene und prüft sie.
@@ -154,8 +157,59 @@ PLAYERS = {
 }
 FACE_COLORS = dict(eye="F4F4F0", pupil="16121A", mouth="7A3A36", tooth="F8F8F4")
 
-ALL_FIGHTERS = {**FIGHTERS, **PLAYERS}
-GROUPS = {"fighters": list(FIGHTERS), "players": list(PLAYERS)}
+ENEMIES = {
+    # Schläger: stämmiger Raufer im grünen Shirt, Stiefel
+    "thug": dict(
+        colors=dict(skin="CD9870", shade="A5764F", hair="19160F", top="378C41", trim="2A6E33", pants="2E3A2C", shoes="281E19",
+                    sole="14100C", belt="191914", brow="19160F"),
+        hip_z=0.88, torso=0.52, neck=0.065, head_h=0.255, head_w=0.205, head_d=0.235,
+        shoulder_x=0.265, chest=(0.46, 0.30), waist=(0.34, 0.25), hips=(0.345, 0.25), leg_x=0.095,
+        arm=(0.26, 0.23, 0.16), arm_r=(0.070, 0.054, 0.056, 0.042), hand_w=0.058,
+        leg_r=(0.108, 0.070, 0.074, 0.054), foot=(0.28, 0.064), jaw=0.98, brow_tilt=22,
+        sleeve="short", glove_from=None, leg_zones="boots", hair_style="short", belt=True, belt_h=0.045, shoe="combat"),
+    # Flitzer: schlank und lang, grüner Irokese, gelbe Turnschuhe
+    "dasher": dict(
+        colors=dict(skin="E2B28C", shade="BC8C68", hair="50EB6E", top="82E178", pants="1E5F3E", shoes="F0F03C", sole="2A2A2A",
+                    belt="14381E", brow="3A2A20"),
+        hip_z=0.88, torso=0.46, neck=0.06, head_h=0.25, head_w=0.19, head_d=0.22,
+        shoulder_x=0.21, chest=(0.36, 0.25), waist=(0.26, 0.20), hips=(0.30, 0.22), leg_x=0.08,
+        arm=(0.25, 0.22, 0.15), arm_r=(0.050, 0.040, 0.043, 0.032), hand_w=0.045,
+        leg_r=(0.088, 0.056, 0.060, 0.042), foot=(0.255, 0.054), jaw=0.88, brow_tilt=20,
+        sleeve="none", glove_from=None, leg_zones="baggy", hair_style="mohawk", belt=True, belt_h=0.04),
+    # Brocken: breit, kahl, Bart, offene grüne Weste
+    "brute": dict(
+        colors=dict(skin="B4805C", shade="8C5E42", hair="1E1612", beard="1E1612", top="1A5C2C", trim="124022", pants="223024",
+                    shoes="1E1A16", sole="0E0C0A", belt="463214", buckle="C8A64B", brow="1E1612"),
+        hip_z=0.86, torso=0.56, neck=0.05, neck_r=0.105, head_h=0.27, head_w=0.235, head_d=0.255,
+        shoulder_x=0.36, chest=(0.66, 0.44), waist=(0.56, 0.42), hips=(0.50, 0.34), leg_x=0.125,
+        arm=(0.30, 0.27, 0.18), arm_r=(0.100, 0.078, 0.082, 0.064), hand_w=0.082,
+        leg_r=(0.140, 0.090, 0.095, 0.070), foot=(0.30, 0.074), jaw=1.08, brow_tilt=26,
+        sleeve="none", glove_from=None, leg_zones="boots", hair_style="bald", belt=True, belt_h=0.06, belt_u=0.18, beard=True,
+        jacket=dict(hem_u=0.06, inner="skin"), shoe="combat"),
+    # Boss Granit: langer dunkelgrüner Mantel, Sonnenbrille, goldene Kette, kurze Stachelhaare
+    "boss": dict(
+        colors=dict(skin="C48E68", shade="9C6C4C", hair="141418", top="104A28", trim="0A2C18", shirt="1A1A20", pants="121E18",
+                    shoes="0F0F0F", sole="080808", belt="DCB93C", buckle="DCB93C", brow="141418", gold="E6C250", lens="101018"),
+        hip_z=0.88, torso=0.58, neck=0.06, neck_r=0.10, head_h=0.265, head_w=0.22, head_d=0.245,
+        shoulder_x=0.33, chest=(0.58, 0.38), waist=(0.46, 0.33), hips=(0.44, 0.30), leg_x=0.11,
+        arm=(0.30, 0.27, 0.18), arm_r=(0.088, 0.068, 0.072, 0.056), hand_w=0.070,
+        leg_r=(0.126, 0.082, 0.086, 0.062), foot=(0.30, 0.070), jaw=1.04, brow_tilt=24,
+        sleeve="long", glove_from=None, leg_zones="boots", hair_style="crop", belt=False, glasses=True, chain=True,
+        jacket=dict(hem_u=0.02, inner="shirt", lapels=True, collar=True, under_belt=True), shoe="combat"),
+}
+# Zusätzliche Modelle derselben Typen: andere Mütze, Frisur oder Kleidung
+ENEMY_VARIANTS = {
+    "thug_cap": {**ENEMIES["thug"], "hat": True, "hair_style": "bald", "colors": {**ENEMIES["thug"]["colors"], "hat": "2A2A32"}},
+    "dasher_spiky": {**ENEMIES["dasher"], "hair_style": "spikes"},
+    "brute_bare": {**{k: v for k, v in ENEMIES["brute"].items() if k != "jacket"}, "bare": True, "muscles": True},
+}
+ALL_FIGHTERS = {**FIGHTERS, **PLAYERS, **ENEMIES, **ENEMY_VARIANTS}
+GROUPS = {"fighters": list(FIGHTERS), "players": list(PLAYERS), "enemies": list(ENEMIES), "variants": list(ENEMY_VARIANTS)}
+
+
+def model_file(name):
+    """Zielpfad der .glb: Kämpfer als player_<name>, Gegner als enemy_<name>."""
+    return f"assets/characters/{'enemy' if name in ENEMIES or name in ENEMY_VARIANTS else 'player'}_{name}.glb"
 
 # Kopfform über die Höhe t (0 = Kinn, 1 = Scheitel): Breite, Tiefe vorn, Tiefe hinten als Anteil des Radius
 HEAD_PROFILE = [
@@ -220,7 +274,7 @@ class FighterBuilder:
     def material(self, key):
         if key not in self.mats:
             color = self.spec["colors"].get(key) or FACE_COLORS[key]
-            self.mats[key] = make_material(f"{self.name}_{key}", color)
+            self.mats[key] = make_material(f"{self.name}__{key}", color)
         return key
 
     def ring(self, pts, w):
@@ -560,7 +614,8 @@ class FighterBuilder:
         if sleeve == "long":
             zones = [(wr - 0.07, "top", 1.10), (wr - 0.02, "trim", 1.16), (9.0, "skin", 1.0)]
         elif sleeve == "short":
-            zones = [(sx + ua * 0.66, "top", 1.05), (el + fa * sp["glove_from"], "skin", 1.0), (9.0, "gloves", 1.18)]
+            zones = [(sx + ua * 0.66, "top", 1.05)]
+            zones += [(el + fa * sp["glove_from"], "skin", 1.0), (9.0, "gloves", 1.18)] if sp["glove_from"] else [(9.0, "skin", 1.0)]
         elif sleeve == "elbow":     # Ärmel bis zum Ellbogen, helles Hemd umgeschlagen
             zones = [(el + fa * 0.18, "top", 1.12), (el + fa * 0.40, "cuff", 1.22), (9.0, "skin", 1.0)]
         elif sp["glove_from"]:
@@ -794,6 +849,74 @@ class FighterBuilder:
             self.build_headband()
         if self.spec.get("beard"):
             self.build_beard()
+        if self.spec.get("hat"):
+            self.build_hat()
+        if self.spec.get("glasses"):
+            self.build_glasses()
+        if self.spec.get("chain"):
+            self.build_chain()
+
+    def hair_bald(self):
+        pass
+
+    def hair_mohawk(self):
+        # Flitzer: schmaler Streifen vom Stirnansatz bis in den Nacken, an den Seiten kahl
+        def off(t, a):
+            strip = smooth((0.52 - abs(math.sin(a))) / 0.22)
+            return lerp(-0.02, 0.022, strip) if t > 0.55 else -0.02
+        self.hair_cap(off, [0.52, 0.62, 0.72, 0.82, 0.90, 0.96, 0.985], n=16)
+        L = self.hh
+        self.spikes([(0.82, 0, L * 0.26, 0.15, 0.0), (0.90, 0, L * 0.34, 0.35, 0.0), (0.97, 0, L * 0.40, 0.55, 0.0),
+                     (0.93, 180, L * 0.38, 1.15, 0.0), (0.82, 180, L * 0.34, 1.35, 0.0), (0.70, 180, L * 0.28, 1.5, 0.0),
+                     (0.60, 180, L * 0.22, 1.6, 0.0)], self.hh * 0.105)
+
+    def hair_crop(self):
+        # Boss: kurz geschnitten, oben kleine Stacheln
+        def off(t, a):
+            hl = self.hairline(a, 0.72, 0.36)
+            return lerp(-0.012, 0.014, smooth((t - hl + 0.05) / 0.10))
+        self.hair_cap(off, [0.30, 0.42, 0.54, 0.64, 0.74, 0.84, 0.92, 0.985])
+        L = self.hh
+        self.spikes([(0.92, 0, L * 0.12, 0.0, 0.0), (0.92, 50, L * 0.12, 0.2, 0.1), (0.92, -50, L * 0.12, 0.2, -0.1),
+                     (0.97, 120, L * 0.12, 0.7, 0.1), (0.97, -120, L * 0.12, 0.7, -0.1), (0.985, 0, L * 0.14, 0.2, 0.0)], self.hh * 0.10)
+
+    def build_hat(self):
+        # Mütze: Kappe über dem Haaransatz mit kurzem Schirm vorn
+        def off(t, a):
+            return lerp(-0.02, 0.030, smooth((t - 0.50) / 0.10))
+        self.hair_cap(off, [0.50, 0.58, 0.68, 0.78, 0.88, 0.96, 0.99], mat="hat", n=14)
+        y = self.face_y(0.58, 0.0)
+        self.block(Vector((0, y - 0.034, self.head_z(0.60))), (self.rx * 1.5, 0.082, 0.014), {"head": 1.0}, "hat",
+                   Matrix.Rotation(math.radians(-10), 3, "X"))
+
+    def build_glasses(self):
+        # Sonnenbrille: zwei dunkle Gläser, Steg und Bügel zu den Ohren
+        head = {"head": 1.0}
+        eye_t, eye_x = 0.50, self.rx * 0.43
+        z = self.head_z(eye_t)
+        for sign in (1, -1):
+            x = sign * eye_x
+            y = self.face_y(eye_t, x)
+            self.block(Vector((x, y - 0.006, z)), (self.rx * 0.62, 0.016, self.hh * 0.15), head, "lens")
+            self.block(Vector((sign * self.rx * 0.97, y * 0.30, z)), (0.010, self.ry * 0.9, self.hh * 0.03), head, "lens")
+        self.block(Vector((0, self.face_y(eye_t, 0.0) - 0.006, z + self.hh * 0.02)), (self.rx * 0.24, 0.014, self.hh * 0.03), head, "lens")
+
+    def build_chain(self):
+        # Goldkette um den Hals, vorn auf der Brust ein Anhänger
+        sp = self.spec
+        nr = self.neck_radius()
+        zs = self.zs
+        pts, ws, radii = [], [], []
+        for fx, drop in ((-1.0, 0.012), (-0.7, -0.035), (-0.35, -0.075), (0.0, -0.095), (0.35, -0.075), (0.7, -0.035), (1.0, 0.012)):
+            z = zs + drop
+            ru, rv, off, w = self.torso_at(min(z, zs - 0.001))
+            x = fx * (nr * 1.75)
+            y = off - rv * (1.0 - 0.8 * fx * fx * 0.0) * 0.96 - 0.004
+            pts.append(Vector((x, y if abs(fx) < 1.0 else y * 0.2, z)))
+            ws.append({"chest": 1.0})
+            radii.append((0.007, 0.007))
+        self.path_tube(pts, radii, ws, "gold", n=4, side=AXIS_Y)
+        self.block(pts[3] + Vector((0, -0.010, -0.030)), (0.030, 0.014, 0.040), {"chest": 1.0}, "gold")
 
     def spikes(self, items, r):
         """items = (t, a in Grad, Länge, Neigung nach hinten, Versatz zur Seite) auf der Haarhülle."""
@@ -1428,7 +1551,7 @@ def main():
         ap.error("--out geht nur mit einer einzelnen Figur")
     outs = {}
     for name in names:
-        out = args.out or f"assets/characters/player_{name}.glb"
+        out = args.out or model_file(name)
         outs[name] = out
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
 

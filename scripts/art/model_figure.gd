@@ -20,6 +20,7 @@ const BAT_TIP := 0.668            # von der vorderen Faust bis zur Spitze des Sc
 
 ## Tests im Headless-Betrieb rendern nichts; dort bleibt es bei der 2D-Figur, ausser `force` ist gesetzt.
 static var force := false
+static var active_count := 0      # wie viele Modelle gerade gezeichnet werden (für die F2-Anzeige)
 
 var fighter_id: StringName
 var skeleton: Skeleton3D
@@ -43,19 +44,26 @@ var _blend_rotation: Array[Quaternion] = []
 var _blend_hips := Vector3.ZERO
 var _last_rotation: Array[Quaternion] = []
 var _last_hips := Vector3.ZERO
+var _active := false          # false: ausserhalb des Bilds, das Teilbild wird nicht neu gezeichnet; true ab dem Bau
 var _bat: Node3D = null       # sitzt an der vorderen Hand und zeigt, wohin der Handknochen zeigt
 var _bat_cracks: Node3D = null
+
+## Pfad des Modells: Kämpfer als `player_<id>.glb`, Gegner und ihre Varianten als `enemy_<id>.glb`.
+static func path_for(id: StringName) -> String:
+	if FighterData.TABLE.has(id):
+		return FighterData.model_path(id)
+	return "res://assets/characters/enemy_%s.glb" % id
 
 static func bat_available() -> bool:
 	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(BAT_PATH)
 
 static func available(id: StringName) -> bool:
-	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(FighterData.model_path(id))
+	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(path_for(id))
 
 static func create(id: StringName) -> ModelFigure:
 	if not available(id):
 		return null
-	var scene := load(FighterData.model_path(id)) as PackedScene
+	var scene := load(path_for(id)) as PackedScene
 	if scene == null:
 		return null
 	var figure := ModelFigure.new()
@@ -103,6 +111,8 @@ func _build(id: StringName, instance: Node) -> bool:
 		_rest_global.append((_rest_global[parent] if parent >= 0 else Transform3D.IDENTITY) * skeleton.get_bone_rest(i))
 	_rest_foot_y = _lowest_foot()
 	_load_clips(instance)
+	_active = true
+	active_count += 1
 	if bat_available():
 		_bat = (load(BAT_PATH) as PackedScene).instantiate()
 		_bat.visible = false
@@ -212,6 +222,43 @@ func set_clip(id: StringName, phase: float, facing: int, flash := false) -> void
 
 func has_bat() -> bool:
 	return _bat != null
+
+## Schaltet das Zeichnen des Teilbilds an oder aus. Wartende Gegner ausserhalb des Bilds kosten so nichts.
+func set_active(on: bool) -> void:
+	if on == _active:
+		return
+	_active = on
+	active_count += 1 if on else -1
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and _active:
+		active_count -= 1
+		_active = false
+
+## Färbt die Zonen des Modells um: palette = {Zone: Farbe}, Zonen wie im Blender-Skript (`skin`, `hair`, `top`, `pants` ...).
+## Jedes Modell bekommt eigene Kopien der Materialien, die geteilten Vorlagen bleiben unverändert. Eine neue Hautfarbe
+## färbt die Schattenlinien (`shade`) mit.
+func apply_palette(palette: Dictionary) -> void:
+	var colors := palette.duplicate()
+	if colors.has("skin") and not colors.has("shade"):
+		colors["shade"] = (colors["skin"] as Color).darkened(0.18)
+	_recolor(_model, colors)
+
+func _recolor(node: Node, colors: Dictionary) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		for surface in mesh_instance.mesh.get_surface_count():
+			var base := mesh_instance.mesh.surface_get_material(surface) as BaseMaterial3D
+			if base == null or not base.resource_name.contains("__"):
+				continue
+			var zone := base.resource_name.get_slice("__", 1)
+			if colors.has(zone):
+				var copy := base.duplicate() as BaseMaterial3D
+				copy.albedo_color = colors[zone]
+				mesh_instance.set_surface_override_material(surface, copy)
+	for child in node.get_children():
+		_recolor(child, colors)
 
 ## Zeigt den Schläger in der Hand (ratio = Haltbarkeit, unter 30 % mit Rissen) oder blendet ihn aus (ratio < 0).
 func show_bat(ratio: float) -> void:

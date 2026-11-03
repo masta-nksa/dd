@@ -43,6 +43,7 @@ var damage_factor := 1.0           # Werte des Kämpfers, siehe `FighterData`
 var attack_speed := 1.0
 var reach_factor := 1.0
 var model: ModelFigure = null      # 3D-Modell, solange die Datei vorhanden ist
+var palette: Dictionary = {}       # Zonenfarben, die das Modell überschreiben (Gegner-Varianten, `EnemyLooks`)
 var player_number := 0     # 0 = Gegner; 1 oder 2 zeichnet Ring und Kennzeichen
 var lives := 0             # Extraleben
 var camera: CameraRig = null   # hier taucht man nach einem verlorenen Leben wieder auf
@@ -103,6 +104,8 @@ func _ready() -> void:
 	if fighter_id != &"":
 		model = ModelFigure.create(fighter_id)
 		if model != null:
+			if not palette.is_empty():
+				model.apply_palette(palette)
 			add_child(model)
 
 func setup(start_x: float, start_z: float, new_bounds: Rect2) -> void:
@@ -575,18 +578,7 @@ func _draw() -> void:
 		if _flash_time > 0.0:   # zittert beim Treffer
 			jitter = 2.0 if int(_flash_time * 120.0) % 2 == 0 else -2.0
 		if model != null:
-			model.show_bat(carried.ratio() if carried != null and not carried.heavy else -1.0)
-			if state == State.ATTACK and attack != null and model.has_clip(attack.id):
-				model.set_clip(attack.id, attack.phase_at(attack_time), facing, _flash_time > 0.06)
-			elif state == State.BLOCK and model.has_clip(&"w_block"):
-				model.set_clip(&"w_block", _block_phase(), facing, _flash_time > 0.06)
-			else:
-				model.set_pose(current_pose(), facing, _flash_time > 0.06)
-			model.draw(self, jitter, 0.0, body_scale)
-			_draw_trail()
-			if carried != null and (carried.heavy or not model.has_bat()):
-				var h := model.hands(body_scale)
-				_hold_carried(h[0], h[1], h[2], h[3], body_scale)
+			_draw_model(jitter)
 		else:
 			FigureArt.draw(self, skin, current_pose(), jitter, 0.0, facing, body_scale, _flash_time > 0.06, _anim_time,
 				_hold_carried if carried != null else Callable())
@@ -594,6 +586,30 @@ func _draw() -> void:
 			Art.text(self, "%dP" % player_number, 20.0, Vector2(0.0, -FigureArt.HEIGHT * body_scale - 14.0), body_color)
 	if debug_boxes:
 		_draw_debug()
+
+## Zeichnet das 3D-Modell, solange die Figur im Bild steht; ausserhalb ruht sein Teilbild.
+func _draw_model(jitter: float) -> void:
+	var on_screen := _on_screen()
+	model.set_active(on_screen)
+	if not on_screen:
+		return
+	model.show_bat(carried.ratio() if carried != null and not carried.heavy else -1.0)
+	if state == State.ATTACK and attack != null and model.has_clip(attack.id):
+		model.set_clip(attack.id, attack.phase_at(attack_time), facing, _flash_time > 0.06)
+	elif state == State.BLOCK and model.has_clip(&"w_block"):
+		model.set_clip(&"w_block", _block_phase(), facing, _flash_time > 0.06)
+	else:
+		model.set_pose(current_pose(), facing, _flash_time > 0.06)
+	model.draw(self, jitter, 0.0, body_scale)
+	_draw_trail()
+	if carried != null and (carried.heavy or not model.has_bat()):
+		var h := model.hands(body_scale)
+		_hold_carried(h[0], h[1], h[2], h[3], body_scale)
+
+## Ob die Figur im Bild oder nahe daran steht: Nur dann wird ihr 3D-Teilbild gezeichnet.
+func _on_screen() -> bool:
+	var area := Rect2(Vector2(-260.0, -320.0), get_viewport_rect().size + Vector2(520.0, 640.0))
+	return area.has_point(get_global_transform_with_canvas().origin)
 
 ## Stelle im Abwehr-Clip: 0–1 Schläger hochnehmen, 1–2 ein Treffer federt nach.
 func _block_phase() -> float:

@@ -1,6 +1,6 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-03. Stufen 1–9 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe9_test.gd`, dazu `grafik_test.gd`).
+Stand: 2026-11-03. Stufen 1–10 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe10_test.gd`, dazu `grafik_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
@@ -24,6 +24,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 7. Kämpferwahl mit acht Figuren und 3D-Modellen (Bruce, Chuck, Jackie, JCVD; zusätzlich Kai, Ria, Bruno, Mika; Modelle aus `tools/blender/build_fighter.py`)
 8. Kampfbewegungen: Clips aus Blender (bisher nur Bruce), Low Kick und High Kick, Combos quer über Schlag und Tritt, Trefferwirkung
 9. Baseballschläger: 3D-Modell in echter Länge, Schwünge mit beiden Händen (bisher nur Bruce), Abwehr und Konter
+10. Gegner als 3D-Modelle mit zufälligen Varianten (Schritt 1 des Gegner-Konzepts; Stilpakete, neue Typen und Bossphasen folgen)
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
@@ -66,7 +67,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - `Hud`: Felder mit `Portrait`, Balken mit Nachlaufspur, Herzen, Combo, Gegner- und Boss-Balken. `HeroFigure`: grosse Figuren in Menü und Endbildschirm.
 - Neu im Spiel: 2 Extraleben (`Fighter.lives`, Einsteigen von oben, 2,5 s unverwundbar), Combos und Punkte pro Treffer (`count_hit`). Das macht das Spiel leichter als in den Balance-Messungen von Stufe 4 beschrieben.
 - Tests: `grafik_test.gd`. Das Aussehen selbst prüfen nur Screenshots neben dem Original.
-- Gegner und Ersatzfiguren zeichnet `FigureArt` in 2D wie im Original; die Spielerfiguren sind seit Stufe 7 3D-Modelle (siehe dort).
+- Ersatzfiguren ohne Modell zeichnet `FigureArt` in 2D wie im Original; Spielerfiguren (Stufe 7) und Gegner (Stufe 10) sind 3D-Modelle (siehe dort).
 
 ## Stufe 7 (Kämpferwahl, 3D-Figuren) – Aufbau
 - `FighterData` (`scripts/core/`): die acht Kämpfer mit Werten (LP, Tempo x/z, Sprung, Gewicht, Schadens-, Angriffstempo- und Reichweitenfaktor), 2D-`Skins` und Modellpfad.
@@ -82,7 +83,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Die `.glb` liegen nicht im Repo (`.gitignore`). Im Workflow baut ein erster Job (`models`) sie mit Blender 5.0.1 aus `tools/blender/build_fighter.py` und gibt sie als Artefakt an den Export weiter. Schlägt er fehl, läuft der Export mit den 2D-Figuren weiter.
   Lokal: `blender -b -P tools/blender/build_fighter.py -- --fighter all --no-blend`, danach `godot --headless --import`.
   Liegen `.blend` im Ordner, kam `--import` am 2026-11-03 nicht innert 150 s zum Ende; eine Kopie des Projekts ohne `.blend` importierte normal.
-- Im Spiel noch 2D: Gegner, HUD-Porträts (2D-Kopf mit demselben Aussehen), Helden in Menü und Endbildschirm (Kai, Ria).
+- Im Spiel noch 2D: HUD-Porträts (2D-Kopf mit demselben Aussehen), Helden in Menü und Endbildschirm (Kai, Ria), die Trainingspuppe.
 - Tests: `stufe7_test.gd` (Daten, Wahl mit Sperre, App-Ablauf, Werte im Kampf, Modelle samt Haltung und Handpunkten, je ein Bot-Lauf pro Figur). Die Modell-Prüfungen überspringt der Test ohne `.glb`.
   Online geprüft (2026-11-03): Workflow baut die acht `.glb` (Artefakt 314 KB), Wahl und Spielstart mit Bruce und Chuck laufen im Browser. Nicht geprüft: Leistung bei längerem Spiel, Balance, echtes Gamepad in der Wahl. Die Schrift des Spiels hat keine Pfeil-Zeichen (←/→).
 
@@ -108,6 +109,14 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Figuren ohne Clips halten den Schläger mit einer Hand und zeigen die Posen `swing`, `homerun`, `block`.
 - Online geprüft (2026-11-03): Im Browser liegt der Schläger nach der ersten Kiste am Boden, lässt sich aufheben, sitzt als 3D-Modell in der Hand, das HUD zeigt ihn samt Abwehr-Hinweis, Abwehr heben und senken läuft, keine Konsolenfehler. Der Schwung selbst nur in der lokalen Aufnahme gesehen. Nicht geprüft: Balance mit Abwehr und kürzerer Reichweite, echtes Gamepad, Bildrate im sichtbaren Browserfenster. Beute landet am selben Punkt wie der Schläger und kann ihn kurz verdecken.
 
+## Stufe 10 (Gegner als 3D-Modelle) – Aufbau
+- Modelle: `ENEMIES` (thug, dasher, brute, boss) und `ENEMY_VARIANTS` (thug_cap, dasher_spiky, brute_bare) in `tools/blender/build_fighter.py`, gebaut als `assets/characters/enemy_<name>.glb` (je 2300–2700 Dreiecke, 220–260 KB). Gleiches 17-Knochen-Skelett wie die Kämpfer, `--fighter all` baut sie mit. Neue Bausteine: Frisuren `bald`, `mohawk`, `crop`, Mütze (`hat`), Sonnenbrille (`glasses`), Goldkette (`chain`), kurze Ärmel ohne Handschuhe.
+- Aussehen: `EnemyLooks` (`scripts/enemies/`) listet je Typ Varianten aus Modell und Zonenfarben (Schläger 6, Flitzer 5, Brocken 5, Boss 1). `Enemy.create(type, index)` würfelt beim Auftauchen eine Variante mit eigenem Zufall, der den des Spiels nicht verschiebt. Ohne Modell nimmt `FigureArt` dieselben Farben (`skin_for`).
+- Umfärben: Die Materialien heissen `<figur>__<zone>` (Godot entfernt «/» und «.» beim Import, Unterstriche bleiben). `ModelFigure.apply_palette` legt je Modell eigene Kopien der Materialien an; eine neue Hautfarbe färbt `shade` mit. Pfad eines Modells: `ModelFigure.path_for` (Kämpfer `player_`, Gegner `enemy_`).
+- Leistung: `ModelFigure.set_active` rechnet das Teilbild nur für Figuren im Bild oder nahe daran (`Fighter._on_screen`, Puffer 260 px seitlich). F2 zeigt Bildzeit, Bildrate und die Zahl der gezeichneten 3D-Figuren (`PerfOverlay`). Lokal gemessen (Intel Arc, Fenster, ohne vsync): Welle mit 3 Gegnern und 2 Spielern im Mittel 5,4 ms, 95 % unter 8,4 ms; 12 Figuren allein kosten rund 2,8 ms.
+- Die Gegner nutzen weiter die `Poses` (noch keine Clips): `current_pose` und die g_-Angriffe sind unverändert.
+- Tests: `stufe10_test.gd` (Varianten, Zonen, Umfärben nur am eigenen Modell, Zählung, Bildrand, 2D-Ersatz).
+
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
 - Host-autoritativ: ein Client simuliert die Welt, der andere sendet Eingaben; Client-Prediction nur für die eigene Figur, getrennt vom Spielzustand.
@@ -116,5 +125,6 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 ## Nächste Schritte
 - Browser-Prüfung der Online-Fassung mit den Modellen (nach dem ersten Lauf des Workflows `Online stellen`).
 - Balance der acht Figuren messen, Werte von Bruce, Chuck, Jackie, JCVD mit dem User abstimmen.
-- Clips (auch Schläger) für die übrigen sieben Kämpfer (`CLIP_FIGHTERS`), danach als zweiter Schritt die Gegner (Wunsch des Users).
-- Eigene Spezialangriffe und Combos je Figur (Pygame-Konzept, Abschnitt 9); Gegner und Porträts als 3D.
+- Gegner-Konzept, Schritt 2 und 3: Stilpakete (Raufer, Treter, Schwergewicht, Stecher, Karateka, Akrobat) für Gegner und Kämpfer, dann die vier neuen Typen Messerkerl, Wächter, Werfer, Springer, Bosswutstufen und Elite-Gegner. Danach Clips (auch Schläger) für die übrigen sieben Kämpfer.
+- Bildrate der Online-Fassung mit Gegnern im sichtbaren Browserfenster ansehen (F2).
+- Eigene Spezialangriffe und Combos je Figur (Pygame-Konzept, Abschnitt 9); Porträts als 3D.

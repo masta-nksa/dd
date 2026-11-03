@@ -10,6 +10,7 @@ Lies zuerst `docs/AUSBLICK.md`.
 - Spielerfiguren: 2D-Spiel mit 3D-Modellen (`ModelFigure`, `SubViewport`); die `.glb` entstehen im Workflow aus `tools/blender/build_fighter.py` und liegen nicht im Repo. Ohne Datei zeichnet `FigureArt` in 2D.
 - Kampf-Clips: Schlüsselposen als Text in `tools/blender/fighter_clips.py` (bisher nur Bruce), Abspielen über `ModelFigure.set_clip`. Ohne Clip gelten die `Poses`.
 - Baseballschläger: `weapon_bat.glb` aus demselben Skript; er ist kein Knochen, sondern folgt dem Knochen der vorderen Hand (`ModelFigure._update_bat`).
+- Gegner: ebenfalls 3D (`enemy_<name>.glb`), Aussehen und Zonenfarben je Variante in `EnemyLooks`. F2 zeigt die Bildrate. Tests laufen am besten in einer Kopie ohne `.blend`.
 
 ## Konventionen
 - Achsen: **X** = horizontal, **Z** = Tiefe/Spur, **Y** = Sprung/Höhe. (Anders als im Pygame-Spiel: dort y = Tiefe, z = Höhe.)

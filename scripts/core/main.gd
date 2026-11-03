@@ -23,6 +23,7 @@ var combat: CombatSystem
 var items: WorldItems
 var director: WaveDirector
 var hud: Hud
+var perf: PerfOverlay
 var game_over := false
 var play_time := 0.0
 
@@ -92,6 +93,8 @@ func _ready() -> void:
 	hud.items = items
 	hud.camera = camera_rig
 	layer.add_child(hud)
+	perf = PerfOverlay.new()
+	layer.add_child(perf)
 	add_child(layer)
 
 	director = WaveDirector.new()
@@ -161,3 +164,6 @@ func _on_dummy_died() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F1:
 		Fighter.debug_boxes = not Fighter.debug_boxes
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F2:
+		perf.visible = not perf.visible
+		perf.queue_redraw()

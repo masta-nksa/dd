@@ -42,11 +42,15 @@ var _wait_offset := randf_range(-50.0, 50.0)
 var _retreat_dir := Vector2.ZERO
 var _retreat_time := 0.5
 
-static func create(type: StringName) -> Enemy:
+## look_index < 0 würfelt eine Variante aus `EnemyLooks`; Tests können eine feste wählen.
+static func create(type: StringName, look_index := -1) -> Enemy:
 	var e := Enemy.new()
 	e.type_id = type
 	e.data = TYPES[type]
-	e.skin = e.data["skin"]
+	var look := EnemyLooks.pick(type, look_index)
+	e.skin = EnemyLooks.skin_for(e.data["skin"], type, look)
+	e.fighter_id = look["model"]
+	e.palette = look["colors"]
 	e.team = 1
 	e.max_health = e.data["hp"]
 	e.body_scale = e.data["scale"]
