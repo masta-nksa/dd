@@ -2,3 +2,6 @@
 build/
 *.import
 export_presets.cfg.bak
+assets/**/*.glb
+assets/**/*.blend
+assets/**/*.blend1
