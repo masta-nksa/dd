@@ -13,6 +13,7 @@ static var waves_enabled := true       # Tests schalten die Wellen ab
 static var training_dummy := false     # Trainingspuppe wie in Stufe 3
 static var two_players := true
 static var props_enabled := true       # Requisiten (Kisten, Fässer ...) aus dem Plan in `Level`
+static var picks: Array[StringName] = [&"kai", &"ria"]   # gewählte Kämpfer (`FighterData`), Spieler 1 und 2
 
 var level: Level
 var fighters: Array[Fighter] = []   # Spieler
@@ -39,11 +40,10 @@ func _ready() -> void:
 		for entry in Level.PROP_PLAN:
 			items.add_prop(entry[0], float(entry[1]), float(entry[2]))
 
-	var aussehen := [Skins.KAI, Skins.RIA]
 	for i in (2 if two_players else 1):
 		var fighter := Fighter.new()
 		fighter.body_color = Art.PLAYER_COLORS[i]
-		fighter.skin = aussehen[i]
+		FighterData.apply(fighter, picks[i])
 		fighter.player_number = i + 1
 		fighter.lives = EXTRA_LIVES if waves_enabled else 0
 		fighter.team = 0

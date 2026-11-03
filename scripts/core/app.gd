@@ -14,6 +14,7 @@ var screen: Screen = null
 var sound: SoundBank
 var save: SaveData
 var two_players := false
+var picks: Array[StringName] = []   # gewählte Kämpfer von Spieler 1 und 2 (siehe `FighterData`)
 
 var _layer: CanvasLayer
 var _backdrop: Node2D = null
@@ -25,6 +26,7 @@ func _ready() -> void:
 	InputSetup.einrichten()
 	save = SaveData.new()
 	save.load_file()
+	picks.assign(FighterData.DEFAULT_PICKS)
 	sound = SoundBank.new()
 	sound.music_enabled = save.music_on
 	add_child(sound)
@@ -57,12 +59,30 @@ func show_menu() -> void:
 	_add_backdrop()
 	var menu := MenuScreen.new()
 	menu.save = save
-	menu.start_requested.connect(start_game)
+	menu.start_requested.connect(show_select)
 	menu.music_requested.connect(toggle_music)
 	_set_screen(menu)
 
+## Kämpferwahl zwischen Menü und Spiel; danach beginnt die Runde mit den gewählten Figuren.
+func show_select(two: bool) -> void:
+	_remove_game()
+	get_tree().paused = false
+	mode = Mode.MENU
+	two_players = two
+	if _backdrop == null:
+		_add_backdrop()
+	var select := SelectScreen.new()
+	select.player_count = 2 if two else 1
+	select.picked.connect(func(ids: Array):
+		for i in ids.size():
+			picks[i] = ids[i]
+		start_game(two))
+	select.back_requested.connect(show_menu)
+	_set_screen(select)
+
 func start_game(two: bool) -> void:
 	two_players = two
+	Main.picks = picks
 	_remove_game()
 	_remove_backdrop()
 	_set_screen(null)

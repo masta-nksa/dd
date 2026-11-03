@@ -14,6 +14,21 @@ static func get_attack(id: StringName) -> AttackData:
 		_build()
 	return _table[id]
 
+## Kopie eines Angriffs mit den Werten eines Kämpfers: Schaden, Tempo (kürzere Zeiten) und Reichweite.
+static func scaled(a: AttackData, damage: float, speed: float, reach: float) -> AttackData:
+	var out := AttackData.new()
+	for prop in a.get_property_list():
+		if prop["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			out.set(prop["name"], a.get(prop["name"]))
+	if out.damage > 0:
+		out.damage = maxi(1, roundi(a.damage * damage))
+	out.startup = a.startup / speed
+	out.active = a.active / speed
+	out.recovery = a.recovery / speed
+	out.reach = a.reach * reach
+	out.box_size.x = a.box_size.x * reach
+	return out
+
 static func _make(id: StringName, values: Dictionary) -> void:
 	var a := AttackData.new()
 	a.id = id

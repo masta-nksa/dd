@@ -41,3 +41,36 @@ const BOSS := {
 	"top": Color8(16, 74, 40), "sleeves": true, "pants": Color8(18, 30, 24), "shoes": Color8(15, 15, 15),
 	"belt": Color8(220, 185, 60), "band": null, "build": 1.25, "extras": [&"glasses", &"chain"],
 }
+
+# --- Kämpfer der Wahl (Farben nach den Blender-Modellen in `tools/blender/build_fighter.py`) ---
+const BRUCE := {
+	"name": "BRUCE", "skin": Color8(232, 185, 143), "hair": Color8(14, 14, 16), "hairstyle": &"short",
+	"top": null, "sleeves": false, "pants": Color8(242, 194, 27), "shoes": Color8(242, 194, 27),
+	"belt": Color8(20, 20, 20), "band": null, "build": 0.92, "extras": [],
+}
+const CHUCK := {
+	"name": "CHUCK", "skin": Color8(217, 164, 124), "hair": Color8(107, 66, 38), "hairstyle": &"short",
+	"top": Color8(47, 79, 131), "sleeves": false, "pants": Color8(59, 91, 140), "shoes": Color8(122, 74, 38),
+	"belt": Color8(90, 58, 30), "band": null, "build": 1.1, "extras": [&"beard", &"gloves"], "gloves": Color8(26, 26, 26),
+}
+const JACKIE := {
+	"name": "JACKIE", "skin": Color8(227, 180, 142), "hair": Color8(14, 14, 18), "hairstyle": &"short",
+	"top": Color8(51, 51, 59), "sleeves": true, "pants": Color8(23, 23, 28), "shoes": Color8(240, 240, 240),
+	"belt": Color8(23, 23, 28), "band": null, "build": 0.95, "extras": [],
+}
+const JCVD := {
+	"name": "JCVD", "skin": Color8(224, 174, 134), "hair": Color8(107, 74, 47), "hairstyle": &"short",
+	"top": Color8(24, 24, 26), "sleeves": false, "pants": Color8(75, 90, 58), "shoes": Color8(20, 20, 22),
+	"belt": Color8(16, 16, 18), "band": null, "build": 1.08, "extras": [&"gloves"], "gloves": Color8(23, 23, 26),
+}
+const BRUNO := {
+	"name": "BRUNO", "skin": Color8(201, 143, 99), "hair": Color8(154, 156, 163), "hairstyle": &"short",
+	"top": Color8(242, 165, 30), "sleeves": true, "pants": Color8(59, 60, 68), "shoes": Color8(70, 48, 31),
+	"belt": Color8(29, 20, 14), "band": null, "build": 1.22, "extras": [&"beard"],
+}
+const MIKA := {
+	"name": "MIKA", "skin": Color8(153, 102, 63), "hair": Color8(223, 227, 242), "hairstyle": &"spikes",
+	"top": Color8(123, 63, 214), "sleeves": false, "pants": Color8(62, 31, 120), "shoes": Color8(183, 155, 234),
+	"belt": Color8(242, 242, 248), "band": Color8(255, 255, 255), "build": 0.85, "extras": [&"gloves"],
+	"gloves": Color8(228, 221, 242),
+}

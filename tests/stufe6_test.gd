@@ -87,7 +87,10 @@ func _init() -> void:
 	# 4) Spiel starten über den Knopf
 	app.screen.buttons[0].pressed.emit()
 	await frames(3)
-	pruefe(app.mode == App.Mode.PLAYING and app.screen == null, "«1 Spieler» startet das Spiel")
+	pruefe(app.screen is SelectScreen, "«1 Spieler» zeigt die Kämpferwahl")
+	(app.screen as SelectScreen).confirm(0)
+	await create_timer(SelectScreen.START_DELAY + 0.3).timeout
+	pruefe(app.mode == App.Mode.PLAYING and app.screen == null, "Nach der Wahl beginnt das Spiel")
 	pruefe(app.game != null and app.game.fighters.size() == 1, "1 Spieler: eine Figur")
 	pruefe(app.game.hud.size.x > 900.0, "HUD füllt das Bild (Breite %.0f)" % app.game.hud.size.x)
 	pruefe(app.game.camera_rig.is_current(), "Spielkamera ist aktiv")
