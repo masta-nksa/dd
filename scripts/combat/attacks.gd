@@ -76,14 +76,14 @@ static func _build() -> void:
 		"knockdown": true, "reach": 52.0, "box_size": Vector3(52, 70, 50), "box_y": 20.0, "drive": 430.0})
 
 	# --- Baseballschläger ---
-	_make(&"w_bat1", {"startup": 0.10, "active": 0.08, "recovery": 0.20, "damage": 12, "knockback": 140.0,
-		"hitstun": 0.38, "reach": 78.0, "box_size": Vector3(64, 52, 40), "box_y": 40.0,
+	_make(&"w_bat1", {"startup": 0.13, "active": 0.08, "recovery": 0.24, "damage": 12, "knockback": 140.0, "trail": &"bat",
+		"hitstun": 0.38, "reach": 72.0, "box_size": Vector3(58, 52, 40), "box_y": 40.0,
 		"chains": {&"punch": &"w_bat2"}, "durability": 1})
-	_make(&"w_bat2", {"startup": 0.14, "active": 0.09, "recovery": 0.30, "damage": 18, "knockback": 380.0,
-		"knockdown": true, "reach": 82.0, "box_size": Vector3(70, 60, 44), "box_y": 36.0, "lunge": 70.0,
+	_make(&"w_bat2", {"startup": 0.15, "active": 0.09, "recovery": 0.30, "damage": 18, "knockback": 380.0, "trail": &"bat",
+		"hitstop": 0.1, "knockdown": true, "reach": 72.0, "box_size": Vector3(60, 60, 44), "box_y": 36.0, "lunge": 70.0,
 		"durability": 1})
-	_make(&"w_homerun", {"startup": 0.14, "active": 0.09, "recovery": 0.30, "damage": 18, "knockback": 380.0,
-		"knockdown": true, "reach": 82.0, "box_size": Vector3(70, 60, 44), "box_y": 36.0, "lunge": 70.0,
+	_make(&"w_homerun", {"startup": 0.22, "active": 0.10, "recovery": 0.36, "damage": 18, "knockback": 380.0, "trail": &"bat",
+		"hitstop": 0.12, "knockdown": true, "reach": 72.0, "box_size": Vector3(60, 60, 44), "box_y": 36.0, "lunge": 70.0,
 		"durability": 2})
 	# --- Werfen: der Wurf selbst richtet keinen Schaden an, erst das fliegende Geschoss ---
 	_make(&"throw", {"startup": 0.12, "active": 0.02, "recovery": 0.22, "damage": 0, "throws": true})

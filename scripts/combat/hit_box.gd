@@ -5,6 +5,7 @@ extends Node
 var active := false
 var attack: AttackData
 var hit_targets: Array[Fighter] = []
+var blocked_targets: Array[Fighter] = []   # abgewehrt: zählt nicht als Treffer, wird aber auch nur einmal geprüft
 var hit_props: Array[Prop] = []
 
 func world_box() -> AABB:

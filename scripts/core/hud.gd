@@ -116,7 +116,7 @@ func _draw_player(f: Fighter, rect: Rect2, number: int) -> void:
 	for i in f.lives:
 		_draw_heart(Vector2(x + 6.0 + i * 16.0, top + 54.0))
 	if f.carried != null:
-		_draw_carried(f.carried, rect)
+		_draw_carried(f.carried, rect, number)
 	if f.combo >= 2:
 		Art.text(self, "%d HITS!" % f.combo, 30.0, Vector2(rect.get_center().x, rect.end.y + 16.0), Art.YELLOW)
 
@@ -126,7 +126,7 @@ func _draw_heart(at: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([at + Vector2(-7.0, -1.0), at + Vector2(7.0, -1.0), at + Vector2(0.0, 6.0)]), Art.RED)
 
 ## Was der Spieler trägt: Symbol und bei Waffen ein Haltbarkeitsbalken (blinkt, wenn sie fast kaputt ist).
-func _draw_carried(carried: Carry, rect: Rect2) -> void:
+func _draw_carried(carried: Carry, rect: Rect2, number: int) -> void:
 	var symbol := Rect2(rect.position.x + 109.0, rect.position.y + 47.0, 28.0, 16.0)
 	WeaponPickup.draw_symbol(self, carried.kind, symbol)
 	var right := symbol.end.x + 8.0
@@ -136,6 +136,7 @@ func _draw_carried(carried: Carry, rect: Rect2) -> void:
 	var ratio := carried.ratio()
 	var flash: Variant = Color.WHITE if ratio < 0.25 and int(_time * 6.0) % 2 == 1 else null
 	draw_bar(self, Rect2(right, symbol.position.y + 3.0, 100.0, 10.0), ratio, ratio, flash)
+	Art.text(self, "%s Abwehr" % InputSetup.key_hint(number, "kick"), 16.0, Vector2(right + 106.0, symbol.get_center().y), Art.TEXT, Art.Anchor.MID_LEFT, false)
 
 func _draw_enemies() -> void:
 	if director == null:

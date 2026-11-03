@@ -6,7 +6,7 @@ extends Node2D
 
 signal died
 
-enum State { IDLE, WALK, JUMP, ATTACK, HIT, KNOCKDOWN, GETUP, DEAD, GRAB }
+enum State { IDLE, WALK, JUMP, ATTACK, HIT, KNOCKDOWN, GETUP, DEAD, GRAB, BLOCK }
 
 static var debug_boxes := false
 
@@ -29,6 +29,13 @@ const RESPAWN_HEIGHT := 330.0
 const RESPAWN_SAFE_TIME := 2.5
 const COMBO_TIME := 1.2
 const TRAIL_POINTS := 6
+const BAT_REACH := 35.0         # 2D-Ersatz des Schlägers: von der Faust bis zur Spitze und bis zum Knauf (Pixel)
+const BAT_BEHIND := 11.0
+const PARRY_WINDOW := 0.15      # so kurz nach dem Hochnehmen wird ein Block zum Konter
+const PARRY_STUN := 0.7         # so lange taumelt der Angreifer
+const BLOCK_RAISE := 0.08       # Zeit, bis der Schläger oben ist
+const BLOCK_RECOIL := 0.18      # so lange federt ein abgewehrter Treffer nach
+const BLOCK_PUSH := 0.35        # Anteil des Rückstosses, der trotz Abwehr ankommt
 
 var skin: Dictionary = Skins.KAI
 var fighter_id: StringName = &""   # gewählter Kämpfer (`FighterData`); leer = nur 2D-Figur
@@ -54,6 +61,7 @@ var vel_x := 0.0
 var facing := 1
 var state := State.IDLE
 var move_input := Vector2.ZERO
+var block_held := false    # der Controller hält die Abwehr
 var bounds := Rect2(0, 300, 3000, 200)
 
 var hurt_box: HurtBox
@@ -75,6 +83,7 @@ var _request_timer := 0.0
 var _air_attack := false
 var _hit_time := 0.3
 var _hit_level: StringName = &"mid"
+var _block_recoil := 0.0
 var _trail: Array[Vector2] = []   # letzte Punkte des schlagenden Glieds
 var _state_time := 0.0
 var _landed := false
@@ -160,6 +169,7 @@ func _physics_process(delta: float) -> void:
 		State.GETUP: _tick_getup()
 		State.DEAD: _tick_dead(delta)
 		State.GRAB: _tick_grab(delta)
+		State.BLOCK: _tick_block(delta)
 
 	_jump_requested = false
 	_grab_requested = false
@@ -228,6 +238,11 @@ func _start_requested_attack() -> bool:
 		&"punch":
 			start_attack(&"w_bat1" if armed else &"punch1")
 		&"kick":
+			if armed:     # mit dem Schläger wird aus dem Tritt die Abwehr
+				_request = &""
+				_block_recoil = 0.0
+				_set_state(State.BLOCK)
+				return true
 			start_attack(&"kick_low")
 		&"kick_high":
 			start_attack(&"kick_high")
@@ -256,6 +271,7 @@ func start_attack(id: StringName) -> void:
 	_request_timer = 0.0
 	hit_box.attack = attack
 	hit_box.hit_targets.clear()
+	hit_box.blocked_targets.clear()
 	hit_box.active = false
 	SoundBank.play(&"throw" if attack.throws else &"whoosh")
 	vel_x = facing * attack.lunge
@@ -429,6 +445,47 @@ func _push_out_of_props() -> void:
 
 # ---------------------------------------------------------------- Treffer
 
+func _tick_block(delta: float) -> void:
+	_slide(delta)
+	_block_recoil = maxf(_block_recoil - delta, 0.0)
+	if not block_held or carried == null or carried.heavy:
+		_set_state(State.IDLE)
+
+## Wehrt einen Angriff ab, wenn der Schläger oben ist und der Angreifer vorn steht. Gibt true zurück, wenn der Angriff
+## abprallt. Kurz nach dem Hochnehmen taumelt der Angreifer zusätzlich (Konter). Jeder Block kostet 1 Haltbarkeit.
+func try_block(a: AttackData, from: Fighter) -> bool:
+	if state != State.BLOCK or carried == null or carried.heavy:
+		return false
+	var side := signi(int(from.pos_x - pos_x))
+	if side != 0 and side != facing:
+		return false
+	var parry := _state_time <= PARRY_WINDOW
+	_freeze_time = a.hitstop
+	from._freeze_time = a.hitstop
+	_block_recoil = BLOCK_RECOIL
+	_flash_time = 0.0
+	vel_x = -facing * a.knockback * BLOCK_PUSH / weight
+	if parry:
+		from.stagger(PARRY_STUN)
+	SoundBank.play(&"heavy" if parry else &"thud")
+	if items != null:
+		items.effects.spark(pos_x + facing * 24.0 * body_scale, pos_z, pos_y + 62.0 * body_scale, parry)
+		items.effects.text(pos_x, pos_z, pos_y + 112.0, "KONTER!" if parry else "BLOCK", Art.YELLOW if parry else Art.TEXT, 26.0 if parry else 20.0)
+	carried.rest -= 1
+	if carried.rest <= 0:
+		break_weapon()
+	return true
+
+## Bricht einen laufenden Angriff ab: Die Figur taumelt und ist so lange wehrlos.
+func stagger(time: float) -> void:
+	hit_box.active = false
+	attack = null
+	_air_attack = false
+	vel_x = 0.0
+	_hit_time = time
+	_hit_level = &"mid"
+	_set_state(State.HIT)
+
 ## Gibt true zurück, wenn der Treffer zählt.
 func take_hit(a: AttackData, from: Fighter, from_x := NAN) -> bool:
 	if is_invulnerable():
@@ -495,6 +552,8 @@ func current_pose() -> Dictionary:
 			return Poses.get_up(_state_time / GETUP_TIME)
 		State.GRAB:
 			return Poses.bend()
+		State.BLOCK:
+			return Poses.block()
 	if cheer:
 		return Poses.cheer(_anim_time)
 	return Poses.carry(Poses.stand(_anim_time)) if is_carrying_heavy() else Poses.stand(_anim_time)
@@ -516,13 +575,16 @@ func _draw() -> void:
 		if _flash_time > 0.0:   # zittert beim Treffer
 			jitter = 2.0 if int(_flash_time * 120.0) % 2 == 0 else -2.0
 		if model != null:
+			model.show_bat(carried.ratio() if carried != null and not carried.heavy else -1.0)
 			if state == State.ATTACK and attack != null and model.has_clip(attack.id):
 				model.set_clip(attack.id, attack.phase_at(attack_time), facing, _flash_time > 0.06)
+			elif state == State.BLOCK and model.has_clip(&"w_block"):
+				model.set_clip(&"w_block", _block_phase(), facing, _flash_time > 0.06)
 			else:
 				model.set_pose(current_pose(), facing, _flash_time > 0.06)
 			model.draw(self, jitter, 0.0, body_scale)
 			_draw_trail()
-			if carried != null:
+			if carried != null and (carried.heavy or not model.has_bat()):
 				var h := model.hands(body_scale)
 				_hold_carried(h[0], h[1], h[2], h[3], body_scale)
 		else:
@@ -533,7 +595,13 @@ func _draw() -> void:
 	if debug_boxes:
 		_draw_debug()
 
-## Bewegungsspur hinter Fuss oder Faust, vom Ende des Anlaufs bis kurz nach dem Treffer.
+## Stelle im Abwehr-Clip: 0–1 Schläger hochnehmen, 1–2 ein Treffer federt nach.
+func _block_phase() -> float:
+	if _block_recoil > 0.0:
+		return 2.0 - _block_recoil / BLOCK_RECOIL
+	return minf(_state_time / BLOCK_RAISE, 1.0)
+
+## Bewegungsspur hinter Fuss, Faust oder Schlägerkopf, vom Ende des Anlaufs bis kurz nach dem Treffer.
 func _draw_trail() -> void:
 	if state != State.ATTACK or attack == null or attack.trail == &"" or model == null:
 		_trail.clear()
@@ -556,10 +624,10 @@ func _hold_carried(hand: Vector2, elbow: Vector2, other_hand: Vector2, _other_el
 		Prop.draw_art(self, carried.kind, prop.width, prop.height, prop.color, 1.0, ((hand + other_hand) * 0.5 - Vector2(0.0, 2.0)).round())
 		return
 	var along := (hand - elbow).normalized()
-	var tip := hand + along * 52.0 * s
+	var tip := hand + along * BAT_REACH * s
 	if carried.ratio() < 0.25:   # wackelt, wenn er fast kaputt ist
 		tip += Vector2(sin(_anim_time * 53.0), cos(_anim_time * 41.0))
-	WeaponPickup.draw_bat(self, hand - along * 8.0 * s, tip, carried.ratio(), s)
+	WeaponPickup.draw_bat(self, hand - along * BAT_BEHIND * s, tip, carried.ratio(), s)
 
 func _draw_debug() -> void:
 	var origin := Vector2(pos_x, pos_z - pos_y)

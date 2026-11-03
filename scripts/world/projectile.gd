@@ -91,5 +91,5 @@ func _draw() -> void:
 		Prop.draw_art(self, carry.kind, carry.prop.width, carry.prop.height, carry.prop.color, 1.0, Vector2(0, 6))
 	else:
 		Art.shadow(self, 0.0, pos_y + 2.0, 44.0 / (1.0 + pos_y / 120.0))
-		var d := Vector2(cos(_spin), sin(_spin)) * 28.0
+		var d := Vector2(cos(_spin), sin(_spin)) * WeaponPickup.BAT_GROUND_PX * 0.5
 		WeaponPickup.draw_bat(self, Vector2(0, -7) - d, Vector2(0, -7) + d, carry.ratio())

@@ -94,6 +94,10 @@ static func cheer(t: float) -> Dictionary:
 	return make({"lean": -4.0, "head": -12.0, "fs": 165.0 - 20.0 * hops, "fe": 15.0, "bs": 150.0, "be": 25.0,
 		"fh": 10.0, "bh": -10.0, "low": 6.0 * hops})
 
+## Abwehr mit dem Schläger: Der Unterarm hält ihn schräg vor den Körper.
+static func block() -> Dictionary:
+	return make({"lean": 4.0, "low": 6.0, "fs": 40.0, "fe": 62.0, "bs": 34.0, "be": 84.0, "fh": 18.0, "fk": 20.0, "bh": -16.0, "bk": 18.0})
+
 static func bend() -> Dictionary:
 	return make({"lean": 38.0, "low": 10.0, "fs": 104.0, "fe": 14.0, "bs": 96.0, "be": 16.0, "fh": 34.0, "fk": 44.0, "bh": -22.0, "bk": 30.0})
 

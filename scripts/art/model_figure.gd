@@ -15,6 +15,8 @@ const DRAW_K := PX_PER_M * VIEW_METERS / VIEW_SIZE
 const HAND_EXTRA := 0.07          # vom Handgelenk bis zur Mitte der Faust
 const BLEND_FRAMES := 5           # so viele gezeichnete Bilder dauert der Übergang von und zu einem Clip
 const AIR_CLIPS: Array[StringName] = [&"jump_kick"]   # ohne stehenden Fuss: hier gilt der tiefste Fuss als Boden
+const BAT_PATH := "res://assets/characters/weapon_bat.glb"
+const BAT_TIP := 0.668            # von der vorderen Faust bis zur Spitze des Schlägers (Meter, `BAT_PROFILE` im Blender-Skript)
 
 ## Tests im Headless-Betrieb rendern nichts; dort bleibt es bei der 2D-Figur, ausser `force` ist gesetzt.
 static var force := false
@@ -41,6 +43,11 @@ var _blend_rotation: Array[Quaternion] = []
 var _blend_hips := Vector3.ZERO
 var _last_rotation: Array[Quaternion] = []
 var _last_hips := Vector3.ZERO
+var _bat: Node3D = null       # sitzt an der vorderen Hand und zeigt, wohin der Handknochen zeigt
+var _bat_cracks: Node3D = null
+
+static func bat_available() -> bool:
+	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(BAT_PATH)
 
 static func available(id: StringName) -> bool:
 	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(FighterData.model_path(id))
@@ -96,6 +103,11 @@ func _build(id: StringName, instance: Node) -> bool:
 		_rest_global.append((_rest_global[parent] if parent >= 0 else Transform3D.IDENTITY) * skeleton.get_bone_rest(i))
 	_rest_foot_y = _lowest_foot()
 	_load_clips(instance)
+	if bat_available():
+		_bat = (load(BAT_PATH) as PackedScene).instantiate()
+		_bat.visible = false
+		skeleton.add_child(_bat)
+		_bat_cracks = _bat.find_child("BatCracks", true, false)
 	return true
 
 ## Merkt sich die Spuren der Clips im Modell. Abgespielt wird nicht mit dem `AnimationPlayer`: Die Zeit bestimmt der Angriff.
@@ -172,6 +184,7 @@ func set_pose(pose: Dictionary, facing: int, flash := false) -> void:
 	# Steht die Figur, kommt der tiefste Fuss genau auf den Boden
 	_model.position.y = 0.0 if absf(turn) >= 1.0 else -(_lowest_foot() - _rest_foot_y)
 	_blend_from_last(&"pose", dir)
+	_update_bat()
 
 func has_clip(id: StringName) -> bool:
 	return _clips.has("%s_R" % id)
@@ -195,6 +208,29 @@ func set_clip(id: StringName, phase: float, facing: int, flash := false) -> void
 	_outer.position = Vector3.ZERO
 	_model.position.y = -(_lowest_foot() - _rest_foot_y) if id in AIR_CLIPS else 0.0
 	_blend_from_last(id, facing)
+	_update_bat()
+
+func has_bat() -> bool:
+	return _bat != null
+
+## Zeigt den Schläger in der Hand (ratio = Haltbarkeit, unter 30 % mit Rissen) oder blendet ihn aus (ratio < 0).
+func show_bat(ratio: float) -> void:
+	if _bat == null:
+		return
+	_bat.visible = ratio >= 0.0
+	if _bat_cracks != null:
+		_bat_cracks.visible = ratio >= 0.0 and ratio < 0.3
+
+## Der Schläger folgt der vorderen Hand: Seine Richtung liest er aus dem Handknochen, so stimmt sie bei Clips und bei Posen.
+func _update_bat() -> void:
+	if _bat == null or not _bat.visible:
+		return
+	var hand := skeleton.find_bone("hand." + _front)
+	var rest := _rest_global[hand]
+	var along := (rest.origin - _rest_global[skeleton.find_bone("forearm." + _front)].origin).normalized()
+	var pose := skeleton.get_bone_global_pose(hand)
+	var dir := (pose.basis.get_rotation_quaternion() * rest.basis.get_rotation_quaternion().inverse()) * along
+	_bat.transform = Transform3D(Basis(Quaternion(Vector3.UP, dir)), pose.origin + dir * HAND_EXTRA)
 
 ## Wechselt die Quelle (Pose oder Clip), läuft die Figur ein paar Bilder lang aus ihrer letzten Haltung in die neue.
 func _blend_from_last(source: StringName, dir: int) -> void:
@@ -230,8 +266,12 @@ func hands(k: float) -> Array[Vector2]:
 		out.append(_to_px(elbow, k))
 	return out
 
-## Spitze des schlagenden Glieds (kind: &"foot" oder &"hand"): das Glied, das am weitesten vom Körper weg ist.
+## Spitze des schlagenden Glieds (kind: &"foot", &"hand" oder &"bat"): das Glied, das am weitesten vom Körper weg ist.
 func strike_point(kind: StringName, k: float) -> Vector2:
+	if kind == &"bat":
+		if _bat != null and _bat.visible:
+			return _to_px(_skeleton_view(_bat.transform * Vector3(0.0, BAT_TIP, 0.0)), k)
+		kind = &"hand"
 	var best := Vector3.ZERO
 	for side in ["L", "R"]:
 		var p := _view_point("%s.%s" % [kind, side])
@@ -275,8 +315,10 @@ func _model_point(p: Vector3) -> Vector3:
 
 ## Ort eines Knochens im Bildraum (Meter, Fusspunkt = Nullpunkt, +y oben).
 func _view_point(bone: String) -> Vector3:
-	var p := _model_point(skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin)
-	return (_outer.transform * _pivot.transform * _model.transform) * p
+	return _skeleton_view(skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin)
+
+func _skeleton_view(p: Vector3) -> Vector3:
+	return (_outer.transform * _pivot.transform * _model.transform) * _model_point(p)
 
 func _lowest_foot() -> float:
 	var lowest := INF

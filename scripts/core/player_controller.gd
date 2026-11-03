@@ -12,6 +12,7 @@ func _physics_process(_delta: float) -> void:
 	fighter.move_input = Vector2(
 		Input.get_axis(p + "left", p + "right"),
 		Input.get_axis(p + "up", p + "down"))
+	fighter.block_held = Input.is_action_pressed(p + "kick")
 	if Input.is_action_just_pressed(p + "jump"):
 		fighter.request_jump()
 	for kind in [&"punch", &"kick", &"kick_high", &"special"]:

@@ -15,12 +15,14 @@ func _physics_process(_delta: float) -> void:
 			continue
 		var box := hb.world_box()
 		for target in fighters:
-			if target == attacker or target.team == attacker.team or target in hb.hit_targets:
+			if target == attacker or target.team == attacker.team or target in hb.hit_targets or target in hb.blocked_targets:
 				continue
 			if not target.hurt_box.is_enabled():
 				continue
 			if box.intersects(target.hurt_box.world_box()):
-				if target.take_hit(hb.attack, attacker):
+				if target.try_block(hb.attack, attacker):
+					hb.blocked_targets.append(target)
+				elif target.take_hit(hb.attack, attacker):
 					hb.hit_targets.append(target)
 					hit_landed.emit(attacker, target, hb.attack)
 					attacker.on_hit_landed(hb.attack)

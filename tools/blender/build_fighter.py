@@ -7,6 +7,7 @@ Figuren: FIGHTERS (bruce, chuck, jackie, jcvd) und zusätzlich PLAYERS (kai, ria
 Vorschau (--preview, nach build/characters_preview/): je Figur Front, Seite, Testpose, Tritt (<name>_sheet.png) und
 Gelenke und Kopf (<name>_detail.png), dazu jede Gruppe aus der Spielkamera (roster_<gruppe>.png, ..._ingame.png).
 --verify lädt jede .glb in eine leere Szene und prüft sie.
+Der Baseballschläger entsteht bei jedem Lauf mit als assets/characters/weapon_bat.glb (nicht mit --out).
 Kampf-Clips (Daten und Bake in `fighter_clips.py`) bekommen die Figuren in CLIP_FIGHTERS; --clip-preview rendert sie als
 Bildreihe aus der Spielkamera und von schräg vorn nach build/characters_preview/<name>_clips_<clip>.png.
 Reference Sheets als Planes in die .blend legen:
@@ -991,6 +992,86 @@ def build_figure(name):
     return b
 
 
+# ---- Baseballschläger -------------------------------------------------------------------
+# (Höhe, Radius, Material) in Metern. Nullpunkt ist die vordere Faust, der Schläger zeigt nach +Z, im Export nach +Y.
+# Rund 87 cm lang wie ein Erwachsenenschläger; der Kopf ist mit 9 cm etwas dicker als die erlaubten 6,6 cm, damit er im Spiel sichtbar bleibt.
+BAT_PROFILE = [
+    (-0.200, 0.000, "knob"), (-0.200, 0.022, "knob"), (-0.190, 0.030, "knob"), (-0.175, 0.030, "knob"),
+    (-0.165, 0.019, "tape"), (0.050, 0.018, "wood"), (0.300, 0.024, "wood"), (0.450, 0.037, "band"), (0.470, 0.039, "wood"),
+    (0.580, 0.045, "wood"), (0.630, 0.046, "end"), (0.655, 0.040, "end"), (0.665, 0.025, "end"), (0.668, 0.000, "end"),
+]
+BAT_COLORS = dict(knob="5E3C22", tape="26222A", wood="C99A5B", band="7A5230", end="B5864C", crack="1C1410")
+BAT_SIDES = 12
+
+
+def build_bat():
+    """Schläger als Rotationskörper, dazu die Risse als eigenes Objekt: Das Spiel blendet sie bei wenig Haltbarkeit ein."""
+    mats = {k: make_material(f"bat_{k}", v) for k, v in BAT_COLORS.items()}
+    names = [k for k in BAT_COLORS if k != "crack"]
+    mesh = bpy.data.meshes.new("Bat")
+    for k in names:
+        mesh.materials.append(mats[k])
+    bm = bmesh.new()
+    rings = []
+    for z, r, _ in BAT_PROFILE:
+        if r <= 0.0:
+            rings.append([bm.verts.new((0.0, 0.0, z))])
+        else:
+            rings.append([bm.verts.new((r * math.cos(2 * math.pi * i / BAT_SIDES), r * math.sin(2 * math.pi * i / BAT_SIDES), z))
+                          for i in range(BAT_SIDES)])
+    for j in range(len(rings) - 1):
+        a, b = rings[j], rings[j + 1]
+        for i in range(BAT_SIDES):
+            if len(a) == 1:
+                verts = (a[0], b[(i + 1) % BAT_SIDES], b[i])
+            elif len(b) == 1:
+                verts = (a[i], a[(i + 1) % BAT_SIDES], b[0])
+            else:
+                verts = (a[i], a[(i + 1) % BAT_SIDES], b[(i + 1) % BAT_SIDES], b[i])
+            face = bm.faces.new(verts)
+            face.material_index = names.index(BAT_PROFILE[j + 1][2])
+            face.smooth = True
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    bat = bpy.data.objects.new("Bat", mesh)
+    bpy.context.scene.collection.objects.link(bat)
+
+    cracks = bpy.data.meshes.new("BatCracks")
+    cracks.materials.append(mats["crack"])
+    bm = bmesh.new()
+    for angle, z0, z1, drift in ((0.4, 0.40, 0.50, 0.02), (0.4, 0.50, 0.60, -0.015), (2.5, 0.46, 0.60, 0.018), (4.4, 0.36, 0.52, -0.02)):
+        quad = []
+        for z, ang, r in ((z0, angle, 0.0395), (z1, angle + drift / 0.04, 0.047)):
+            n = Vector((math.cos(ang), math.sin(ang), 0.0))
+            side = Vector((-n.y, n.x, 0.0)) * 0.0035
+            quad += [n * r + side + Vector((0, 0, z)), n * r - side + Vector((0, 0, z))]
+        verts = [bm.verts.new(p) for p in quad]
+        bm.faces.new((verts[0], verts[1], verts[3], verts[2]))
+    bm.normal_update()
+    bm.to_mesh(cracks)
+    bm.free()
+    crack_obj = bpy.data.objects.new("BatCracks", cracks)
+    bpy.context.scene.collection.objects.link(crack_obj)
+    return [bat, crack_obj]
+
+
+def export_bat(out, save_blend):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.context.preferences.filepaths.save_version = 0
+    parts = build_bat()
+    if save_blend:
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(os.path.splitext(out)[0] + ".blend"))
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in parts:
+        o.select_set(True)
+    bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=True, export_yup=True, export_animations=False)
+    pts = [v.co for v in parts[0].data.vertices]
+    print(f"OK: {out} (Schläger {max(p.z for p in pts) - min(p.z for p in pts):.3f} m lang, "
+          f"Kopf {2 * max(max(abs(p.x), abs(p.y)) for p in pts if p.z > 0.2):.3f} m dick, "
+          f"{sum(len(f.vertices) - 2 for f in parts[0].data.polygons)} Dreiecke)")
+
+
 def export_glb(b, out):
     bpy.ops.object.select_all(action="DESELECT")
     for o in b.parts + [b.armature]:
@@ -1161,6 +1242,7 @@ def preview_clips(name, b, outdir, only=None):
         if only and clip_id not in only:
             continue
         arm.animation_data.action = bpy.data.actions[f"{clip_id}_R"]
+        show_bat(arm, clip.get("bat", False))
         times = (0.0, 0.35, 0.7, 1.0, 1.5, 2.0, 2.35, 2.7, 3.0)
         rows = []
         for view, location in (("side", (0.45, -8, h * 0.56)), ("angle", (5.6, -5.6, h * 0.8))):
@@ -1178,8 +1260,24 @@ def preview_clips(name, b, outdir, only=None):
         for f in rows:
             os.remove(f)
     arm.animation_data.action = None
+    show_bat(arm, False)
     fighter_clips.reset_pose(arm)
     arm.rotation_euler.z = 0.0
+
+
+def show_bat(arm, visible):
+    """Vorschau: Schläger an der vorderen Hand, so wie ihn `ModelFigure` im Spiel setzt."""
+    bat = bpy.data.objects.get("Bat")
+    if bat is None:
+        bat = build_bat()[0]
+        bpy.data.objects.remove(bpy.data.objects["BatCracks"])
+        bat.parent = arm
+        bat.parent_type = "BONE"
+        bat.parent_bone = "hand.R"
+        length = arm.data.bones["hand.R"].length
+        bat.location = (0.0, fighter_clips.HAND_EXTRA - length, 0.0)
+        bat.rotation_euler = (-math.pi / 2, 0.0, 0.0)
+    bat.hide_render = not visible
 
 
 def stack_rows(paths, out):
@@ -1339,11 +1437,11 @@ def main():
         b = build_figure(name)
         add_reference_planes(args.front, args.side, ALL_FIGHTERS[name]["hip_z"] * 2)
         if name in fighter_clips.CLIP_FIGHTERS:
-            slip, dip = fighter_clips.bake_clips(b.armature)
+            slip, dip, reach = fighter_clips.bake_clips(b.armature)
             print(f"{name}: {len(bpy.data.actions)} Clips, stehende Füsse rutschen {slip * 1000:.2f} mm, "
-                  f"Füsse tauchen {dip * 1000:.1f} mm in den Boden")
-            if slip > 0.005 or dip > 0.02:
-                raise RuntimeError(f"{name}: Clip-Fehler, Fuss rutscht {slip:.4f} m, im Boden {dip:.4f} m")
+                  f"Füsse tauchen {dip * 1000:.1f} mm in den Boden, Hände liegen {reach * 1000:.1f} mm neben dem Griff")
+            if slip > 0.005 or dip > 0.02 or reach > 0.025:
+                raise RuntimeError(f"{name}: Clip-Fehler, Fuss rutscht {slip:.4f} m, im Boden {dip:.4f} m, Griff {reach:.4f} m")
 
         if not args.no_blend:
             bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(os.path.splitext(out)[0] + ".blend"))
@@ -1361,6 +1459,9 @@ def main():
     if args.preview:
         for g in groups:
             preview_roster(GROUPS[g], g, args.preview_dir)
+
+    if not args.out:
+        export_bat("assets/characters/weapon_bat.glb", not args.no_blend)
 
     if args.verify:
         print_report([verify(name, outs[name]) for name in names])

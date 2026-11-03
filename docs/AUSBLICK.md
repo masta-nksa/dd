@@ -1,6 +1,6 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-03. Stufen 1–8 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe8_test.gd`, dazu `grafik_test.gd`).
+Stand: 2026-11-03. Stufen 1–9 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe9_test.gd`, dazu `grafik_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
@@ -23,6 +23,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 6. Töne, HUD, Game-Over/Sieg, Rekord
 7. Kämpferwahl mit acht Figuren und 3D-Modellen (Bruce, Chuck, Jackie, JCVD; zusätzlich Kai, Ria, Bruno, Mika; Modelle aus `tools/blender/build_fighter.py`)
 8. Kampfbewegungen: Clips aus Blender (bisher nur Bruce), Low Kick und High Kick, Combos quer über Schlag und Tritt, Trefferwirkung
+9. Baseballschläger: 3D-Modell in echter Länge, Schwünge mit beiden Händen (bisher nur Bruce), Abwehr und Konter
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
@@ -39,7 +40,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - `scripts/world/`: `Prop` (Kiste, Fass, Tonne, Laterne; blockieren am Boden, Sprung drüber), `WorldItems` (Register + Waffenverteiler),
   `WeaponData`/`Carry` (Tragedinge), `WeaponPickup`, `Pickup` (Huhn +40, Apfel +15, Geld +1000), `Projectile` (Wurf), `Effects` (Splitter, Texte).
 - Greifen: 1P E, 2P J. Nichts in Reichweite → das Getragene wird geworfen. Mit Kiste/Fass/Tonne wirft jede Angriffstaste, kein Sprung, langsamer.
-- Schläger: Kette 12/18 (2. wirft um), Homerun (Spezial) kostet 2, 10 Haltbarkeit pro Treffer, Wurf 14 Schaden und kostet 3.
+- Schläger: Kette 12/18 (2. wirft um), Homerun (Spezial) kostet 2, 10 Haltbarkeit pro Treffer, Wurf 14 Schaden und kostet 3. Modell, Reichweite und Abwehr: siehe Stufe 9.
   Kiste 18 + 1,2 s, Fass 24 + Umwerfen, Tonne 12 + 1,0 s; zerbricht beim Wurf. Bei Treffern fällt Schweres zu Boden, Gestorbene lassen Waffen blinkend liegen (8 s).
 - Drops (Gegner: Schläger 10 %, Flitzer 12 %, Brocken 30 %; Requisiten: Kiste 22 %, Fass 12 %, Tonne 15 %) mit Bremsen wie im Pygame-Spiel;
   erste Kiste enthält immer einen Schläger. Gegner umgehen Hindernisse (`Enemy._detour`) und benutzen keine Waffen.
@@ -94,7 +95,17 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Combos: `AttackData.chains` nennt je Taste den nächsten Angriff, statt `chain_to`. Längste Kette: Schlag, Low Kick, Schlag, High Kick, Schlag. Die Tabelle hat keine Schleifen, das prüft der Test.
 - Trefferwirkung: `hitstop` je Angriff, `hit_level` wählt die Reaktion (`Poses.hit`: oben fliegt der Kopf zurück, unten knickt die Figur ein), Bewegungsspur `trail` an Fuss oder Faust (nur bei 3D-Figuren), stärkerer Funke und Kamerastoss ab `hitstop` 0,1 s.
 - Vorschau: `blender -b -P tools/blender/build_fighter.py -- --fighter bruce --clip-preview` schreibt Bildreihen nach `build/characters_preview/`. Tests: `stufe8_test.gd`.
-- Online geprüft (2026-11-03): Workflow baut die Clips, im Browser laufen Menü, Wahl von Bruce, Low Kick und High Kick ohne Konsolenfehler. Nicht geprüft: Balance mit den neuen Angriffen, echtes Gamepad mit LB, Bildrate im sichtbaren Browserfenster. Bruces `.glb` wuchs durch die Clips von 258 auf rund 400 KB.
+- Online geprüft (2026-11-03): Workflow baut die Clips, im Browser laufen Menü, Wahl von Bruce, Low Kick und High Kick ohne Konsolenfehler. Nicht geprüft: Balance mit den neuen Angriffen, echtes Gamepad mit LB, Bildrate im sichtbaren Browserfenster. Bruces `.glb` wuchs durch die Clips von 258 auf rund 490 KB (mit den Schläger-Clips aus Stufe 9).
+
+## Stufe 9 (Baseballschläger) – Aufbau
+- Modell: `build_bat` in `tools/blender/build_fighter.py`, wird bei jedem Lauf ohne `--out` als `assets/characters/weapon_bat.glb` gebaut (288 Dreiecke, 12 KB). 86,8 cm lang wie ein Erwachsenenschläger, Kopf mit 9,2 cm bewusst dicker als die erlaubten 6,6 cm, damit er im Spiel sichtbar bleibt. Die Risse sind ein eigenes Objekt `BatCracks`.
+- In der Hand: `ModelFigure.show_bat` und `_update_bat`. Der Schläger ist kein Knochen (das Skelett bleibt bei 17) und liest seine Richtung aus dem Knochen der vorderen Hand. Bei Posen verlängert er so den Unterarm, in Clips zeigt die Hand entlang des Schlägers.
+- Am Boden, im Flug und im HUD zeichnet `WeaponPickup.draw_bat` ein einmal gerendertes Bild desselben Modells. Ohne `.glb` bleibt eine 2D-Ersatzzeichnung mit denselben Massen.
+- Clips (nur Bruce): `w_bat1`, `w_bat2`, `w_homerun`, `w_block`. Mit `bat=True` greifen die Arme per IK den Griff (`grip_*`, `bat_el`, `bat_az`, `grip_gap`). Der Bau bricht ab, wenn eine Hand über 2,5 cm neben dem Griff liegt. Der Rechtshänder holt mit der Brust zur Kamera aus; der Schlägerkopf streicht auf der Kamera-Seite um den Körper, leicht schräg, weil ein waagrechter Schwung in der Seitenansicht zu stark verkürzt wirkt.
+- Werte: Reichweite 72 px statt 78–82 px, Anlauf 0,13 / 0,15 / 0,22 s, Schaden und Haltbarkeit wie bisher.
+- Abwehr: `Fighter.State.BLOCK`. Mit Schläger hebt die Low-Kick-Taste (G / L / B) ihn hoch, solange sie gehalten wird (`block_held`); man steht still. `try_block` wehrt Angriffe von vorn ohne Schaden und Trefferstarre ab und kostet 1 Haltbarkeit. In den ersten 0,15 s wird daraus ein Konter: Der Angreifer taumelt 0,7 s (`stagger`). Von hinten trifft es weiter. Abgewehrte Angriffe zählen nicht als Treffer (`HitBox.blocked_targets`), Gegner-Ketten laufen dann nicht weiter.
+- Tests: `stufe9_test.gd`. Vorschau: `... -- --fighter bruce --clip-preview w_bat1 w_bat2 w_homerun w_block`.
+- Figuren ohne Clips halten den Schläger mit einer Hand und zeigen die Posen `swing`, `homerun`, `block`. Nicht geprüft: Balance mit Abwehr und kürzerer Reichweite, echtes Gamepad.
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
@@ -104,5 +115,5 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 ## Nächste Schritte
 - Browser-Prüfung der Online-Fassung mit den Modellen (nach dem ersten Lauf des Workflows `Online stellen`).
 - Balance der acht Figuren messen, Werte von Bruce, Chuck, Jackie, JCVD mit dem User abstimmen.
-- Clips für die übrigen sieben Kämpfer (`CLIP_FIGHTERS`), danach als zweiter Schritt die Gegner (Wunsch des Users).
+- Clips (auch Schläger) für die übrigen sieben Kämpfer (`CLIP_FIGHTERS`), danach als zweiter Schritt die Gegner (Wunsch des Users).
 - Eigene Spezialangriffe und Combos je Figur (Pygame-Konzept, Abschnitt 9); Gegner und Porträts als 3D.

@@ -14,6 +14,10 @@ Winkel in Grad wie in `scripts/art/poses.gd`, Längen in Spielpixeln (52,8 px = 
                           0 = Bein folgt den Winkeln
     pf / pb               Drehung des stehenden Fusses
     look                  wie stark der Kopf trotz Körperdrehung zum Gegner schaut (0 bis 1)
+Schläger-Clips (`bat=True`): Die Arme folgen nicht den Winkeln, sondern greifen per IK den Schläger:
+    grip_f, grip_u, grip_n  Faust der vorderen Hand: nach vorn, über dem Boden, zur Kamera (Pixel, vom Fusspunkt aus)
+    bat_el, bat_az          Richtung des Schlägers: Höhe über der Waagrechten; 0 = nach vorn, 90 = zur Kamera, 180 = zurück
+    grip_gap                Abstand der hinteren Hand entlang des Schlägers (Meter, negativ = weiter oben am Holz)
 «Vorn» ist die Körperseite zur Kamera; jeder Clip entsteht darum als `<id>_R` (Blick nach rechts) und `<id>_L`.
 
 Zeitachse: Jeder Clip dauert 3 Sekunden: 0–1 Anlauf, 1–2 Treffer, 2–3 Erholung. `ModelFigure` bildet die echten
@@ -26,13 +30,15 @@ from bpy_extras import anim_utils
 from mathutils import Matrix, Quaternion, Vector
 
 PX_PER_M = 52.8     # wie `ModelFigure.PX_PER_M`
+HAND_EXTRA = 0.07   # wie `ModelFigure.HAND_EXTRA`: vom Handgelenk bis zur Mitte der Faust
 FPS = 60
 CLIP_FIGHTERS = ("bruce",)
 
 STANCE = dict(lean=6.0, head=0.0, pitch=0.0, yaw=0.0, twist=0.0, shift=0.0, low=2.0,
               fs=28.0, fe=110.0, fsl=0.0, fel=0.0, bs=12.0, be=120.0, bsl=0.0, bel=0.0,
               fh=12.0, fk=10.0, fl=0.0, ff=0.0, pf=0.0, fp=1.0,
-              bh=-12.0, bk=12.0, bl=0.0, bf=0.0, pb=0.0, bp=1.0, look=0.8)
+              bh=-12.0, bk=12.0, bl=0.0, bf=0.0, pb=0.0, bp=1.0, look=0.8,
+              grip_f=0.0, grip_u=0.0, grip_n=0.0, bat_el=0.0, bat_az=0.0, grip_gap=0.085)
 
 
 def P(**changes):
@@ -83,6 +89,48 @@ def _spin(yaw):
              fh=96.0, fk=6.0, fl=66.0, fs=70.0, fe=16.0, fsl=62.0, bs=68.0, be=20.0, bsl=62.0)
 
 
+# Schläger: Rechtshänder im Blick nach rechts, die Brust zeigt beim Ausholen zur Kamera. Der Schwung läuft von den Beinen über
+# Hüfte und Brust in die Arme, der Schlägerkopf kommt zuletzt und streicht auf der Kamera-Seite um den Körper nach vorn.
+_BAT_READY = P(yaw=35.0, twist=12.0, pf=20.0, pb=20.0, low=3.0, lean=4.0,
+               grip_f=8.0, grip_u=72.0, grip_n=8.0, bat_el=60.0, bat_az=160.0)
+_BAT_LOAD = P(yaw=70.0, twist=18.0, pf=52.0, pb=46.0, low=7.0, shift=-8.0, lean=3.0,
+              grip_f=-6.0, grip_u=76.0, grip_n=6.0, bat_el=42.0, bat_az=190.0)
+_BAT_DRIVE = P(yaw=38.0, twist=16.0, pf=34.0, pb=30.0, low=9.0, shift=3.0, lean=10.0,
+               grip_f=8.0, grip_u=60.0, grip_n=16.0, bat_el=22.0, bat_az=120.0)
+_BAT_HIT = P(yaw=2.0, twist=-6.0, pf=6.0, pb=-8.0, low=8.0, shift=12.0, lean=14.0,
+             grip_f=32.0, grip_u=56.0, grip_n=8.0, bat_el=8.0, bat_az=6.0)
+_BAT_THRU = P(yaw=-24.0, twist=-16.0, pf=-14.0, pb=-22.0, low=7.0, shift=13.0, lean=12.0,
+              grip_f=28.0, grip_u=58.0, grip_n=-4.0, bat_el=14.0, bat_az=-40.0)
+_BAT_FOLLOW = P(yaw=-52.0, twist=-24.0, pf=-26.0, pb=-40.0, low=5.0, shift=6.0, lean=4.0,
+                grip_f=6.0, grip_u=72.0, grip_n=-8.0, bat_el=34.0, bat_az=-135.0)
+
+_BACK_LOAD = P(yaw=-58.0, twist=-26.0, pf=-28.0, pb=-40.0, low=6.0, shift=-4.0, lean=4.0,
+               grip_f=2.0, grip_u=72.0, grip_n=-8.0, bat_el=40.0, bat_az=-150.0)
+_BACK_DRIVE = P(yaw=-24.0, twist=-20.0, pf=-14.0, pb=-24.0, low=9.0, shift=4.0, lean=10.0,
+                grip_f=14.0, grip_u=58.0, grip_n=-8.0, bat_el=18.0, bat_az=-70.0)
+_BACK_HIT = P(yaw=8.0, twist=10.0, pf=6.0, pb=6.0, low=10.0, shift=14.0, lean=14.0,
+              grip_f=32.0, grip_u=52.0, grip_n=2.0, bat_el=2.0, bat_az=-6.0)
+_BACK_THRU = P(yaw=34.0, twist=18.0, pf=22.0, pb=22.0, low=8.0, shift=15.0, lean=12.0,
+               grip_f=26.0, grip_u=56.0, grip_n=14.0, bat_el=6.0, bat_az=48.0)
+_BACK_END = P(yaw=58.0, twist=20.0, pf=38.0, pb=36.0, low=5.0, shift=6.0, lean=6.0,
+              grip_f=6.0, grip_u=66.0, grip_n=14.0, bat_el=30.0, bat_az=130.0)
+
+_HR_LOAD = P(yaw=88.0, twist=22.0, pf=60.0, pb=55.0, low=13.0, shift=-11.0, lean=6.0, head=-4.0,
+             grip_f=-10.0, grip_u=70.0, grip_n=8.0, bat_el=18.0, bat_az=200.0)
+_HR_DRIVE = P(yaw=44.0, twist=18.0, pf=36.0, pb=32.0, low=14.0, shift=2.0, lean=12.0,
+              grip_f=6.0, grip_u=50.0, grip_n=18.0, bat_el=-4.0, bat_az=115.0)
+_HR_HIT = P(yaw=-2.0, twist=-8.0, pf=4.0, pb=-10.0, low=9.0, shift=14.0, lean=6.0, pitch=-2.0,
+            grip_f=30.0, grip_u=53.0, grip_n=6.0, bat_el=20.0, bat_az=4.0)
+_HR_THRU = P(yaw=-32.0, twist=-22.0, pf=-16.0, pb=-30.0, low=4.0, shift=15.0, lean=-2.0,
+             grip_f=26.0, grip_u=62.0, grip_n=-6.0, bat_el=38.0, bat_az=-55.0)
+_HR_FOLLOW = P(yaw=-66.0, twist=-30.0, pf=-30.0, pb=-48.0, low=1.0, shift=8.0, lean=-10.0, head=-8.0,
+               grip_f=6.0, grip_u=80.0, grip_n=-8.0, bat_el=52.0, bat_az=-150.0)
+
+# Abwehr: Schläger schräg vor dem Körper, die hintere Hand greift weit oben am Holz
+_GUARD = P(yaw=28.0, twist=8.0, pf=16.0, pb=16.0, low=8.0, shift=-2.0, lean=4.0,
+           grip_f=9.0, grip_u=52.0, grip_n=8.0, bat_el=68.0, bat_az=6.0, grip_gap=-0.28)
+_GUARD_HIT = {**_GUARD, "shift": -7.0, "lean": -5.0, "low": 10.0, "grip_f": 4.0, "grip_u": 54.0, "bat_el": 74.0}
+
 # (Zeit, Pose, Kurve auf dem Weg zu dieser Pose). out = schnell los und abfedern, in = beschleunigen, soft = beides
 CLIPS = {
     "kick_low": dict(samples=(8, 4, 10), keys=[
@@ -108,6 +156,17 @@ CLIPS = {
         (0.0, STANCE, "soft"), (0.7, _SPIN_LOAD, "soft"), (1.0, _spin(-14.0), "in"),
         (2.0, _spin(346.0), "lin"), (2.6, {**_spin(360.0), "fh": 44.0, "fk": 78.0, "fl": 8.0, "ff": -20.0}, "out"),
         (3.0, {**STANCE, "yaw": 360.0, "pb": 360.0}, "soft")]),
+    "w_bat1": dict(bat=True, samples=(8, 5, 10), keys=[
+        (0.0, _BAT_READY, "soft"), (0.45, _BAT_LOAD, "soft"), (0.8, _BAT_DRIVE, "in"), (1.0, _BAT_HIT, "lin"),
+        (2.0, _BAT_THRU, "lin"), (2.5, _BAT_FOLLOW, "out"), (3.0, _BAT_READY, "soft")]),
+    "w_bat2": dict(bat=True, samples=(8, 5, 10), keys=[
+        (0.0, _BAT_READY, "soft"), (0.4, _BACK_LOAD, "soft"), (0.8, _BACK_DRIVE, "in"), (1.0, _BACK_HIT, "lin"),
+        (2.0, _BACK_THRU, "lin"), (2.5, _BACK_END, "out"), (3.0, _BAT_READY, "soft")]),
+    "w_homerun": dict(bat=True, samples=(10, 5, 12), keys=[
+        (0.0, _BAT_READY, "soft"), (0.55, _HR_LOAD, "soft"), (0.85, _HR_DRIVE, "in"), (1.0, _HR_HIT, "lin"),
+        (2.0, _HR_THRU, "lin"), (2.45, _HR_FOLLOW, "out"), (3.0, _BAT_READY, "soft")]),
+    "w_block": dict(bat=True, samples=(4, 8, 1), keys=[
+        (0.0, _BAT_READY, "soft"), (1.0, _GUARD, "out"), (1.3, _GUARD_HIT, "out"), (2.0, _GUARD, "soft"), (3.0, _GUARD, "lin")]),
 }
 
 _EASES = {
@@ -255,6 +314,25 @@ class ClipRig:
             r_foot = r_foot.slerp(flat, high)
         return {f"thigh.{side}": r_thigh, f"shin.{side}": r_shin, f"foot.{side}": r_foot}
 
+    def bat_wrists(self, ch, near):
+        """Ziel der Handgelenke beim Griff um den Schläger: vordere und hintere Hand, dazu die Richtung des Schlägers."""
+        near_x = -1.0 if near == "R" else 1.0
+        el, az = math.radians(ch["bat_el"]), math.radians(ch["bat_az"])
+        forward, toward, up = Vector((0.0, -1.0, 0.0)), Vector((near_x, 0.0, 0.0)), Vector((0.0, 0.0, 1.0))
+        direction = forward * (math.cos(az) * math.cos(el)) + toward * (math.sin(az) * math.cos(el)) + up * math.sin(el)
+        fist = (forward * ch["grip_f"] + toward * ch["grip_n"] + up * ch["grip_u"]) / PX_PER_M
+        top = fist - direction * HAND_EXTRA
+        return top, top - direction * ch["grip_gap"], direction
+
+    def _bat_arm(self, side, wrist, direction, r_chest, shoulder, pole):
+        a, b = self._length("upper_arm", side), self._length("forearm", side)
+        upper, lower = self._two_bone(shoulder, wrist, a, b, pole)
+        r_upper = _chain(r_chest, self._dir("upper_arm", side), upper)
+        r_lower = _chain(r_upper, self._dir("forearm", side), lower)
+        # Die Hand zeigt entlang des Schlägers: So liest das Spiel seine Richtung aus dem Handknochen
+        r_hand = (r_lower @ self._dir("forearm", side)).rotation_difference(direction) @ r_lower
+        return {f"upper_arm.{side}": r_upper, f"forearm.{side}": r_lower, f"hand.{side}": r_hand}
+
     def _arm_pose(self, side, f, ch, r_chest, yaw_frame):
         side_x = 1.0 if side == "L" else -1.0
         upper = yaw_frame @ _limb_dir(ch[f + "s"], ch[f + "sl"], side_x)
@@ -263,7 +341,7 @@ class ClipRig:
         r_lower = _chain(r_upper, self._dir("forearm", side), lower)
         return {f"upper_arm.{side}": r_upper, f"forearm.{side}": r_lower, f"hand.{side}": r_lower}
 
-    def solve(self, ch, near):
+    def solve(self, ch, near, bat=False):
         """Absolute Drehung jedes Knochens gegenüber der Rest-Pose (im Raum der Armature) und Versatz der Hüfte."""
         far = "L" if near == "R" else "R"
         near_x = -1.0 if near == "R" else 1.0       # die rechte Körperhälfte liegt bei -X
@@ -280,8 +358,16 @@ class ClipRig:
                "neck": r_chest.slerp(look, ch["look"] * 0.5), "head": r_chest.slerp(look, ch["look"])}
         out.update(self._leg(near, "f", ch, near, hips_pos, r_hips, yaw_hips, near_x))
         out.update(self._leg(far, "b", ch, near, hips_pos, r_hips, yaw_hips, near_x))
-        out.update(self._arm_pose(near, "f", ch, r_chest, yaw_chest))
-        out.update(self._arm_pose(far, "b", ch, r_chest, yaw_chest))
+        if bat:
+            chest_pos = hips_pos + r_hips @ (self.head["spine"] - self.head["hips"]) + r_spine @ (self.head["chest"] - self.head["spine"])
+            top, low, direction = self.bat_wrists(ch, near)
+            for side, wrist in ((near, top), (far, low)):
+                shoulder = chest_pos + r_chest @ (self.head[f"upper_arm.{side}"] - self.head["chest"])
+                pole = Vector(((1.0 if side == "L" else -1.0) * 0.35, 0.0, -1.0))
+                out.update(self._bat_arm(side, wrist, direction, r_chest, shoulder, pole))
+        else:
+            out.update(self._arm_pose(near, "f", ch, r_chest, yaw_chest))
+            out.update(self._arm_pose(far, "b", ch, r_chest, yaw_chest))
         return out, offset
 
     def basis(self, rotations):
@@ -301,7 +387,7 @@ class ClipRig:
 
 def bake_clips(arm):
     """Legt jeden Clip für beide Blickrichtungen als Action an. Gibt zurück (Meter): den grössten Fehler der stehenden
-    Füsse und wie tief ein Fuss höchstens in den Boden taucht."""
+    Füsse, wie tief ein Fuss höchstens in den Boden taucht und wie weit eine Hand höchstens neben dem Griff liegt."""
     sc = bpy.context.scene
     sc.render.fps = FPS
     sc.render.fps_base = 1.0
@@ -311,7 +397,7 @@ def bake_clips(arm):
     bones = arm.pose.bones
     for pb in bones:
         pb.rotation_mode = "QUATERNION"
-    worst, dip = 0.0, 0.0
+    worst, dip, reach = 0.0, 0.0, 0.0
     for clip_id, clip in CLIPS.items():
         for near in ("R", "L"):
             action = bpy.data.actions.new(f"{clip_id}_{near}")
@@ -320,7 +406,7 @@ def bake_clips(arm):
             last = {}
             for t in sample_times(clip):
                 frame = t * FPS
-                rotations, offset = rig.solve(channels_at(clip, t), near)
+                rotations, offset = rig.solve(channels_at(clip, t), near, clip.get("bat", False))
                 basis = rig.basis(rotations)
                 for name, q in basis.items():
                     if name in last and last[name].dot(q) < 0.0:
@@ -337,10 +423,12 @@ def bake_clips(arm):
                     point.interpolation = "LINEAR"
             slip, deep = _check_feet(arm, rig, clip, near)
             worst, dip = max(worst, slip), max(dip, deep)
+            if clip.get("bat"):
+                reach = max(reach, _check_hands(arm, rig, clip, near))
     arm.animation_data.action = None
     reset_pose(arm)
     sc.frame_set(0)
-    return worst, dip
+    return worst, dip, reach
 
 
 def _check_feet(arm, rig, clip, near):
@@ -362,6 +450,19 @@ def _check_feet(arm, rig, clip, near):
             if not clip.get("air"):
                 dip = max(dip, floor[side] - arm.pose.bones[f"foot.{side}"].tail.z)
     return worst, dip
+
+
+def _check_hands(arm, rig, clip, near):
+    """Misst, ob beide Hände wirklich den Griff erreichen: sonst stimmt die Pose nicht zur Armlänge."""
+    worst = 0.0
+    far = "L" if near == "R" else "R"
+    for t in sample_times(clip):
+        frame = t * FPS
+        bpy.context.scene.frame_set(int(frame), subframe=frame - int(frame))
+        bpy.context.view_layer.update()
+        top, low, _ = rig.bat_wrists(channels_at(clip, t), near)
+        worst = max(worst, (arm.pose.bones[f"hand.{near}"].head - top).length, (arm.pose.bones[f"hand.{far}"].head - low).length)
+    return worst
 
 
 def reset_pose(arm):
