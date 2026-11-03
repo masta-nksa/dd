@@ -105,7 +105,8 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Werte: Reichweite 72 px statt 78–82 px, Anlauf 0,13 / 0,15 / 0,22 s, Schaden und Haltbarkeit wie bisher.
 - Abwehr: `Fighter.State.BLOCK`. Mit Schläger hebt die Low-Kick-Taste (G / L / B) ihn hoch, solange sie gehalten wird (`block_held`); man steht still. `try_block` wehrt Angriffe von vorn ohne Schaden und Trefferstarre ab und kostet 1 Haltbarkeit. In den ersten 0,15 s wird daraus ein Konter: Der Angreifer taumelt 0,7 s (`stagger`). Von hinten trifft es weiter. Abgewehrte Angriffe zählen nicht als Treffer (`HitBox.blocked_targets`), Gegner-Ketten laufen dann nicht weiter.
 - Tests: `stufe9_test.gd`. Vorschau: `... -- --fighter bruce --clip-preview w_bat1 w_bat2 w_homerun w_block`.
-- Figuren ohne Clips halten den Schläger mit einer Hand und zeigen die Posen `swing`, `homerun`, `block`. Nicht geprüft: Balance mit Abwehr und kürzerer Reichweite, echtes Gamepad.
+- Figuren ohne Clips halten den Schläger mit einer Hand und zeigen die Posen `swing`, `homerun`, `block`.
+- Online geprüft (2026-11-03): Im Browser liegt der Schläger nach der ersten Kiste am Boden, lässt sich aufheben, sitzt als 3D-Modell in der Hand, das HUD zeigt ihn samt Abwehr-Hinweis, Abwehr heben und senken läuft, keine Konsolenfehler. Der Schwung selbst nur in der lokalen Aufnahme gesehen. Nicht geprüft: Balance mit Abwehr und kürzerer Reichweite, echtes Gamepad, Bildrate im sichtbaren Browserfenster. Beute landet am selben Punkt wie der Schläger und kann ihn kurz verdecken.
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
