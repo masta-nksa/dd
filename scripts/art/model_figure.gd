@@ -3,6 +3,7 @@ extends Node
 ## Ein 3D-Kämpfer (geriggte `.glb`, 17 Knochen) im 2D-Spiel. Das Modell steht in einem eigenen `SubViewport`
 ## mit orthografischer Seitenkamera; das Bild zeichnet der `Fighter` an die Stelle der 2D-Figur.
 ## Die Haltung kommt aus denselben Gelenkwinkeln wie bei `FigureArt` (siehe `Poses`), die Spielregeln bleiben 2D.
+## Hat das Modell einen Clip zum Angriff (`tools/blender/fighter_clips.py`), zeigt `set_clip` stattdessen diesen.
 ## Modell: Blick +Z, T-Pose, Knochennamen wie in `tools/blender/build_fighter.py`. Fehlt die Datei, gibt `create` null zurück
 ## und der Aufrufer zeichnet weiter mit `FigureArt`.
 
@@ -12,6 +13,8 @@ const FEET_MARGIN := 0.25         # Meter zwischen Fusspunkt und unterem Bildran
 const PX_PER_M := 52.8            # Spielpixel pro Meter: FigureArt ist 95 px für 1,8 m gross
 const DRAW_K := PX_PER_M * VIEW_METERS / VIEW_SIZE
 const HAND_EXTRA := 0.07          # vom Handgelenk bis zur Mitte der Faust
+const BLEND_FRAMES := 5           # so viele gezeichnete Bilder dauert der Übergang von und zu einem Clip
+const AIR_CLIPS: Array[StringName] = [&"jump_kick"]   # ohne stehenden Fuss: hier gilt der tiefste Fuss als Boden
 
 ## Tests im Headless-Betrieb rendern nichts; dort bleibt es bei der 2D-Figur, ausser `force` ist gesetzt.
 static var force := false
@@ -30,6 +33,14 @@ var _rest_foot_y := 0.0
 var _flash := false
 var _front := "R"
 var _back := "L"
+var _clips := {}              # "kick_high_R" -> {"anim": Animation, "rotation": {Knochen: Spur}, "hips": Spur}
+var _source: StringName = &""   # was gerade gezeigt wird: leer = noch nichts, &"pose" oder der Clipname
+var _source_dir := 1
+var _blend_left := 0
+var _blend_rotation: Array[Quaternion] = []
+var _blend_hips := Vector3.ZERO
+var _last_rotation: Array[Quaternion] = []
+var _last_hips := Vector3.ZERO
 
 static func available(id: StringName) -> bool:
 	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(FighterData.model_path(id))
@@ -84,7 +95,36 @@ func _build(id: StringName, instance: Node) -> bool:
 		var parent := skeleton.get_bone_parent(i)
 		_rest_global.append((_rest_global[parent] if parent >= 0 else Transform3D.IDENTITY) * skeleton.get_bone_rest(i))
 	_rest_foot_y = _lowest_foot()
+	_load_clips(instance)
 	return true
+
+## Merkt sich die Spuren der Clips im Modell. Abgespielt wird nicht mit dem `AnimationPlayer`: Die Zeit bestimmt der Angriff.
+func _load_clips(root: Node) -> void:
+	var player := _find_player(root)
+	if player == null:
+		return
+	player.active = false
+	for clip in player.get_animation_list():
+		var anim := player.get_animation(clip)
+		var entry := {"anim": anim, "rotation": {}, "hips": -1}
+		for track in anim.get_track_count():
+			var bone := skeleton.find_bone(String(anim.track_get_path(track).get_subname(0)))
+			if bone < 0:
+				continue
+			if anim.track_get_type(track) == Animation.TYPE_ROTATION_3D:
+				entry["rotation"][bone] = track
+			elif anim.track_get_type(track) == Animation.TYPE_POSITION_3D and skeleton.get_bone_name(bone) == "hips":
+				entry["hips"] = track
+		_clips[clip] = entry
+
+func _find_player(node: Node) -> AnimationPlayer:
+	if node is AnimationPlayer:
+		return node
+	for child in node.get_children():
+		var found := _find_player(child)
+		if found != null:
+			return found
+	return null
 
 func _find_skeleton(node: Node) -> Skeleton3D:
 	if node is Skeleton3D:
@@ -131,6 +171,53 @@ func set_pose(pose: Dictionary, facing: int, flash := false) -> void:
 	_outer.position = Vector3(dir * -sin(turn_rad) * 40.0 / PX_PER_M, absf(sin(turn_rad)) * 7.0 / PX_PER_M, 0.0)
 	# Steht die Figur, kommt der tiefste Fuss genau auf den Boden
 	_model.position.y = 0.0 if absf(turn) >= 1.0 else -(_lowest_foot() - _rest_foot_y)
+	_blend_from_last(&"pose", dir)
+
+func has_clip(id: StringName) -> bool:
+	return _clips.has("%s_R" % id)
+
+## Zeigt den Clip eines Angriffs. phase: 0–1 Anlauf, 1–2 Treffer, 2–3 Erholung (`AttackData.phase_at`).
+## Ein Clip enthält die ganze Körperbewegung; Füsse und Hüfte sind beim Bau schon auf den Boden gerechnet.
+func set_clip(id: StringName, phase: float, facing: int, flash := false) -> void:
+	if flash != _flash:
+		_set_flash(flash)
+	_front = "R" if facing > 0 else "L"
+	_back = "L" if facing > 0 else "R"
+	var entry: Dictionary = _clips["%s_%s" % [id, _front]]
+	var anim: Animation = entry["anim"]
+	skeleton.reset_bone_poses()
+	for bone in entry["rotation"]:
+		skeleton.set_bone_pose_rotation(bone, anim.rotation_track_interpolate(entry["rotation"][bone], phase))
+	if entry["hips"] >= 0:
+		skeleton.set_bone_pose_position(skeleton.find_bone("hips"), anim.position_track_interpolate(entry["hips"], phase))
+	_model.rotation.y = facing * PI * 0.5
+	_pivot.rotation.z = 0.0
+	_outer.position = Vector3.ZERO
+	_model.position.y = -(_lowest_foot() - _rest_foot_y) if id in AIR_CLIPS else 0.0
+	_blend_from_last(id, facing)
+
+## Wechselt die Quelle (Pose oder Clip), läuft die Figur ein paar Bilder lang aus ihrer letzten Haltung in die neue.
+func _blend_from_last(source: StringName, dir: int) -> void:
+	if _clips.is_empty():
+		return
+	var hips := skeleton.find_bone("hips")
+	if source != _source:
+		if _source != &"" and dir == _source_dir:
+			_blend_left = BLEND_FRAMES
+			_blend_rotation = _last_rotation.duplicate()
+			_blend_hips = _last_hips
+		_source = source
+	_source_dir = dir
+	if _blend_left > 0:
+		var amount := 1.0 - float(_blend_left) / float(BLEND_FRAMES + 1)
+		for i in skeleton.get_bone_count():
+			skeleton.set_bone_pose_rotation(i, _blend_rotation[i].slerp(skeleton.get_bone_pose_rotation(i), amount))
+		skeleton.set_bone_pose_position(hips, _blend_hips.lerp(skeleton.get_bone_pose_position(hips), amount))
+		_blend_left -= 1
+	_last_rotation.resize(skeleton.get_bone_count())
+	for i in skeleton.get_bone_count():
+		_last_rotation[i] = skeleton.get_bone_pose_rotation(i)
+	_last_hips = skeleton.get_bone_pose_position(hips)
 
 ## Vordere Hand, vorderer Ellbogen, hintere Hand, hinterer Ellbogen: Spielpixel um den Fusspunkt, wie `FigureArt` sie liefert.
 func hands(k: float) -> Array[Vector2]:
@@ -142,6 +229,15 @@ func hands(k: float) -> Array[Vector2]:
 		out.append(_to_px(hand, k))
 		out.append(_to_px(elbow, k))
 	return out
+
+## Spitze des schlagenden Glieds (kind: &"foot" oder &"hand"): das Glied, das am weitesten vom Körper weg ist.
+func strike_point(kind: StringName, k: float) -> Vector2:
+	var best := Vector3.ZERO
+	for side in ["L", "R"]:
+		var p := _view_point("%s.%s" % [kind, side])
+		if absf(p.x) >= absf(best.x):
+			best = p
+	return _to_px(best, k)
 
 func _to_px(view: Vector3, k: float) -> Vector2:
 	return Vector2(view.x, -view.y) * PX_PER_M * k

@@ -1,16 +1,16 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-03. Stufen 1–7 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe7_test.gd`, dazu `grafik_test.gd`).
+Stand: 2026-11-03. Stufen 1–8 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe8_test.gd`, dazu `grafik_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
 
 ## Stufe 3 (Kampf) – Aufbau
-- `scripts/combat/`: `AttackData` (Daten), `Attacks` (Tabelle: punch1–3, kick, spin, jump_kick), `HitBox`, `HurtBox` (Quader x/y/z),
+- `scripts/combat/`: `AttackData` (Daten), `Attacks` (Tabelle: punch1–3, kick_low, kick_high, spin, jump_kick), `HitBox`, `HurtBox` (Quader x/y/z),
   `CombatSystem` (prüft aktive HitBoxen gegen HurtBoxen anderer Teams, jeder Angriff trifft ein Ziel nur einmal).
 - `Fighter`: FSM IDLE, WALK, JUMP, ATTACK, HIT, KNOCKDOWN, GETUP, DEAD; Eingabepuffer 0,25 s; Combo startet in der Erholung;
-  Trefferpause 0,07 s; Rückstoss; Umwerfen mit Unverwundbarkeit am Boden; Spezial «spin» kostet 4 LP.
-- Steuerung: 1P F = Schlag, G = Tritt, R = Spezial; 2P K, L, I. F1 zeigt Hit- (rot) und Hurtboxen (grün).
+  Trefferpause je Angriff (`AttackData.hitstop`); Rückstoss; Umwerfen mit Unverwundbarkeit am Boden; Spezial «spin» kostet 4 LP.
+- Steuerung: 1P F = Schlag, G = Low Kick, T = High Kick, R = Spezial; 2P K, L, U, I. F1 zeigt Hit- (rot) und Hurtboxen (grün).
 - Trainingspuppe (Team 1) in `main.gd`, steht nach 2,5 s wieder auf; wird in Stufe 4 durch Gegner ersetzt.
 - Offen: Spezial-Kombination F+G.
 
@@ -22,6 +22,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 5. Waffen Stufe 1 (Greifen, Werfen, Schläger, Kisten, Drops)
 6. Töne, HUD, Game-Over/Sieg, Rekord
 7. Kämpferwahl mit acht Figuren und 3D-Modellen (Bruce, Chuck, Jackie, JCVD; zusätzlich Kai, Ria, Bruno, Mika; Modelle aus `tools/blender/build_fighter.py`)
+8. Kampfbewegungen: Clips aus Blender (bisher nur Bruce), Low Kick und High Kick, Combos quer über Schlag und Tritt, Trefferwirkung
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
@@ -51,7 +52,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Pause: Esc, P oder Start auf jedem Controller. Wird der Controller eines mitspielenden Spielers getrennt, pausiert das Spiel mit Grund.
 - `SaveData`: Rekord als Gesamtpunktzahl, getrennt nach 1 und 2 Spielern, dazu Musik an/aus, in `user://doppelfaust.cfg`.
 - `SoundBank`: 14 Geräusche und eine Musikschleife (4 Takte, 8 s) im Code berechnet, Port von `ton.py`; `SoundBank.play(id)` bleibt ohne `App` still. M schaltet die Musik.
-- Controller: erster Controller = Spieler 1, zweiter = Spieler 2. A Sprung, X/LB Schlag, B Tritt, Y Spezial, RB Greifen, Stick/Kreuz bewegen. Der Greifen-Hinweis im HUD zeigt dann «RB».
+- Controller: erster Controller = Spieler 1, zweiter = Spieler 2. A Sprung, X Schlag, B Low Kick, LB High Kick, Y Spezial, RB Greifen, Stick/Kreuz bewegen. Der Greifen-Hinweis im HUD zeigt dann «RB».
 - Tests: 44 Prüfungen in `stufe6_test.gd`. Im Browser geprüft: Start, Menü, Spielstart, Pause, Speichern über einen Neuladen. Von Hand zu prüfen: Klang der Töne, echtes Gamepad. Nicht portiert: Rumble, Einsteigen mitten im Spiel.
 - Die Warnung «ObjectDB instances leaked» am Ende von `stufe6_test.gd` kommt von Tonobjekten, die beim sofortigen Beenden noch spielen.
 
@@ -79,9 +80,21 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
   Fallstrick: `Skeleton3D.get_bone_global_rest` liefert in Godot 4.4.1 für den Hüft-Teil Nullen; `ModelFigure` rechnet die Rast-Pose selbst aus.
 - Die `.glb` liegen nicht im Repo (`.gitignore`). Im Workflow baut ein erster Job (`models`) sie mit Blender 5.0.1 aus `tools/blender/build_fighter.py` und gibt sie als Artefakt an den Export weiter. Schlägt er fehl, läuft der Export mit den 2D-Figuren weiter.
   Lokal: `blender -b -P tools/blender/build_fighter.py -- --fighter all --no-blend`, danach `godot --headless --import`.
+  Liegen `.blend` im Ordner, kam `--import` am 2026-11-03 nicht innert 150 s zum Ende; eine Kopie des Projekts ohne `.blend` importierte normal.
 - Im Spiel noch 2D: Gegner, HUD-Porträts (2D-Kopf mit demselben Aussehen), Helden in Menü und Endbildschirm (Kai, Ria).
 - Tests: `stufe7_test.gd` (Daten, Wahl mit Sperre, App-Ablauf, Werte im Kampf, Modelle samt Haltung und Handpunkten, je ein Bot-Lauf pro Figur). Die Modell-Prüfungen überspringt der Test ohne `.glb`.
   Online geprüft (2026-11-03): Workflow baut die acht `.glb` (Artefakt 314 KB), Wahl und Spielstart mit Bruce und Chuck laufen im Browser. Nicht geprüft: Leistung bei längerem Spiel, Balance, echtes Gamepad in der Wahl. Die Schrift des Spiels hat keine Pfeil-Zeichen (←/→).
+
+## Stufe 8 (Kampfbewegungen) – Aufbau
+- Clips nur für Bruce (`CLIP_FIGHTERS` in `tools/blender/fighter_clips.py`): `punch1`–`punch3`, `kick_low`, `kick_high`, `jump_kick`, `spin`, je als `<id>_R` und `<id>_L`. Die anderen sieben und die Gegner bleiben bei `Poses`.
+- Die Schlüsselposen stehen als Text in `fighter_clips.py`, weil der Workflow die `.glb` neu baut und die `.blend` nicht im Repo liegt. Der Bake rechnet sie auf das Skelett der Figur um: stehende Füsse per IK (reicht das Bein nicht, hebt sich die Ferse), Boden als Grenze. Der Bau bricht ab, wenn ein Fuss über 5 mm rutscht oder über 2 cm in den Boden taucht.
+- Zeitachse jedes Clips: 3 s, davon 0–1 Anlauf, 1–2 Treffer, 2–3 Erholung. `AttackData.phase_at` bildet die echte Angriffszeit darauf ab; `ModelFigure.set_clip` tastet die Spuren selbst ab (`rotation_track_interpolate`), kein `AnimationPlayer`. So gelten Angriffstempo und Trefferstopp automatisch, und die Spiellogik bestimmt die Zeit.
+- Beim Wechsel zwischen Pose und Clip läuft die Figur über 5 Bilder aus der letzten Haltung in die neue (`_blend_from_last`). Clipnamen ohne Punkt: Godot ersetzt ihn beim Import durch `_`.
+- Angriffe: `kick` ist ersetzt durch `kick_low` (schnell, 10 Schaden, trifft unten) und `kick_high` (langsamer, 17 Schaden, trifft oben). Bei den Figuren ohne Clip zeigen die Posen `low_kick` und `high_kick` dasselbe.
+- Combos: `AttackData.chains` nennt je Taste den nächsten Angriff, statt `chain_to`. Längste Kette: Schlag, Low Kick, Schlag, High Kick, Schlag. Die Tabelle hat keine Schleifen, das prüft der Test.
+- Trefferwirkung: `hitstop` je Angriff, `hit_level` wählt die Reaktion (`Poses.hit`: oben fliegt der Kopf zurück, unten knickt die Figur ein), Bewegungsspur `trail` an Fuss oder Faust (nur bei 3D-Figuren), stärkerer Funke und Kamerastoss ab `hitstop` 0,1 s.
+- Vorschau: `blender -b -P tools/blender/build_fighter.py -- --fighter bruce --clip-preview` schreibt Bildreihen nach `build/characters_preview/`. Tests: `stufe8_test.gd`.
+- Nicht geprüft: Balance mit den neuen Angriffen, echtes Gamepad mit LB. Bruces `.glb` wuchs durch die Clips von 258 auf rund 400 KB.
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
@@ -91,4 +104,5 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 ## Nächste Schritte
 - Browser-Prüfung der Online-Fassung mit den Modellen (nach dem ersten Lauf des Workflows `Online stellen`).
 - Balance der acht Figuren messen, Werte von Bruce, Chuck, Jackie, JCVD mit dem User abstimmen.
+- Clips für die übrigen sieben Kämpfer (`CLIP_FIGHTERS`), danach als zweiter Schritt die Gegner (Wunsch des Users).
 - Eigene Spezialangriffe und Combos je Figur (Pygame-Konzept, Abschnitt 9); Gegner und Porträts als 3D.

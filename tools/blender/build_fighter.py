@@ -7,6 +7,8 @@ Figuren: FIGHTERS (bruce, chuck, jackie, jcvd) und zusätzlich PLAYERS (kai, ria
 Vorschau (--preview, nach build/characters_preview/): je Figur Front, Seite, Testpose, Tritt (<name>_sheet.png) und
 Gelenke und Kopf (<name>_detail.png), dazu jede Gruppe aus der Spielkamera (roster_<gruppe>.png, ..._ingame.png).
 --verify lädt jede .glb in eine leere Szene und prüft sie.
+Kampf-Clips (Daten und Bake in `fighter_clips.py`) bekommen die Figuren in CLIP_FIGHTERS; --clip-preview rendert sie als
+Bildreihe aus der Spielkamera und von schräg vorn nach build/characters_preview/<name>_clips_<clip>.png.
 Reference Sheets als Planes in die .blend legen:
     ... -- --fighter bruce --front front.png --side side.png
 
@@ -26,6 +28,11 @@ import bmesh
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fighter_clips
+
 
 def hex_color(h):
     r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
@@ -989,8 +996,10 @@ def export_glb(b, out):
     for o in b.parts + [b.armature]:
         o.select_set(True)
     bpy.context.view_layer.objects.active = b.armature
+    # Die Clips sind schon Bild für Bild berechnet: nichts nachsampeln, nur die belegten Spuren schreiben
     bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_selection=True, export_yup=True,
-                              export_skins=True, export_animations=False, export_apply=False)
+                              export_skins=True, export_apply=False, export_animations=bool(bpy.data.actions),
+                              export_animation_mode="ACTIONS", export_force_sampling=False)
 
 
 # ---- Vorschau ---------------------------------------------------------------------------
@@ -1141,6 +1150,58 @@ def preview_figure(name, b, outdir):
     montage(details, os.path.join(outdir, f"{name}_detail.png"))
 
 
+def preview_clips(name, b, outdir, only=None):
+    """Jeder Clip als Bildreihe: oben aus der Spielkamera (Blick nach rechts), unten von schräg vorn."""
+    arm = b.armature
+    cam = setup_render((260, 260))
+    bpy.context.scene.cycles.samples = 12
+    arm.rotation_euler.z = math.pi / 2
+    h = max(v.co.z for o in b.parts for v in o.data.vertices)
+    for clip_id, clip in fighter_clips.CLIPS.items():
+        if only and clip_id not in only:
+            continue
+        arm.animation_data.action = bpy.data.actions[f"{clip_id}_R"]
+        times = (0.0, 0.35, 0.7, 1.0, 1.5, 2.0, 2.35, 2.7, 3.0)
+        rows = []
+        for view, location in (("side", (0.45, -8, h * 0.56)), ("angle", (5.6, -5.6, h * 0.8))):
+            files = []
+            for i, t in enumerate(times):
+                bpy.context.scene.frame_set(int(round(t * fighter_clips.FPS)))
+                aim(cam, location, (0.45 if view == "side" else 0.0, 0, h * 0.56), h * 1.4)
+                files.append(os.path.join(outdir, f"_clip_{clip_id}_{view}_{i}.png"))
+                render(files[-1])
+            rows.append(os.path.join(outdir, f"_clip_{clip_id}_{view}.png"))
+            montage(files, rows[-1])
+            for f in files:
+                os.remove(f)
+        stack_rows(rows, os.path.join(outdir, f"{name}_clips_{clip_id}.png"))
+        for f in rows:
+            os.remove(f)
+    arm.animation_data.action = None
+    fighter_clips.reset_pose(arm)
+    arm.rotation_euler.z = 0.0
+
+
+def stack_rows(paths, out):
+    arrays = []
+    for p in paths:
+        img = bpy.data.images.load(os.path.abspath(p))
+        w, h = img.size
+        a = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(a)
+        arrays.append(a.reshape(h, w, 4))
+        bpy.data.images.remove(img)
+    # Blender speichert Bilder von unten nach oben: die erste Zeile kommt also ans Ende
+    sheet = np.concatenate(arrays[::-1], axis=0)
+    h, w, _ = sheet.shape
+    img = bpy.data.images.new("rows", w, h, alpha=False)
+    img.pixels.foreach_set(sheet.ravel())
+    img.filepath_raw = os.path.abspath(out)
+    img.file_format = "PNG"
+    img.save()
+    bpy.data.images.remove(img)
+
+
 def preview_roster(names, label, outdir):
     """Eine Gruppe nebeneinander aus der Spielkamera, einmal gross und einmal in Spielgrösse."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -1259,6 +1320,7 @@ def main():
     ap.add_argument("--no-blend", action="store_true", help="keine .blend neben die .glb schreiben")
     ap.add_argument("--preview", action="store_true", help="Vorschaubilder rendern")
     ap.add_argument("--preview-dir", default="build/characters_preview")
+    ap.add_argument("--clip-preview", nargs="*", default=None, help="Clips als Bildreihe rendern (ohne Namen: alle)")
     ap.add_argument("--verify", action="store_true", help="jede .glb neu importieren und prüfen")
     args = ap.parse_args(argv)
 
@@ -1276,6 +1338,12 @@ def main():
         bpy.context.preferences.filepaths.save_version = 0     # keine .blend1 neben die Modelle
         b = build_figure(name)
         add_reference_planes(args.front, args.side, ALL_FIGHTERS[name]["hip_z"] * 2)
+        if name in fighter_clips.CLIP_FIGHTERS:
+            slip, dip = fighter_clips.bake_clips(b.armature)
+            print(f"{name}: {len(bpy.data.actions)} Clips, stehende Füsse rutschen {slip * 1000:.2f} mm, "
+                  f"Füsse tauchen {dip * 1000:.1f} mm in den Boden")
+            if slip > 0.005 or dip > 0.02:
+                raise RuntimeError(f"{name}: Clip-Fehler, Fuss rutscht {slip:.4f} m, im Boden {dip:.4f} m")
 
         if not args.no_blend:
             bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(os.path.splitext(out)[0] + ".blend"))
@@ -1285,6 +1353,10 @@ def main():
         if args.preview:
             os.makedirs(args.preview_dir, exist_ok=True)
             preview_figure(name, b, args.preview_dir)
+
+        if args.clip_preview is not None and name in fighter_clips.CLIP_FIGHTERS:
+            os.makedirs(args.preview_dir, exist_ok=True)
+            preview_clips(name, b, args.preview_dir, args.clip_preview)
 
     if args.preview:
         for g in groups:

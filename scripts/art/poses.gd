@@ -13,10 +13,12 @@ extends RefCounted
 
 const BASE := {"lean": 6.0, "low": 2.0, "head": 0.0, "fs": 28.0, "fe": 110.0, "bs": 12.0, "be": 120.0,
 	"fh": 12.0, "fk": 10.0, "bh": -12.0, "bk": 12.0, "turn": 0.0, "flip": 0.0}
-const KICKS: Array[StringName] = [&"kick", &"high_kick", &"spin_kick", &"jump_kick", &"whirl"]
+const KICKS: Array[StringName] = [&"kick", &"low_kick", &"high_kick", &"spin_kick", &"jump_kick", &"whirl"]
 
 static var _attacks := {}
 static var _hit := {}
+static var _hit_high := {}
+static var _hit_low := {}
 static var _lying := {}
 static var _getting_up := {}
 
@@ -50,8 +52,20 @@ static func walk(t: float) -> Dictionary:
 static func jump() -> Dictionary:
 	return make({"lean": 12.0, "fh": 55.0, "fk": 85.0, "bh": -5.0, "bk": 75.0, "fs": 55.0, "fe": 70.0, "bs": -35.0, "be": 60.0})
 
-static func hit(t: float) -> Dictionary:
-	var pose := _hit_pose().duplicate()
+## level: wo der Treffer sitzt. Oben fliegt der Kopf zurück, unten knickt die Figur nach vorn ein.
+static func hit(t: float, level: StringName = &"mid") -> Dictionary:
+	var pose: Dictionary
+	match level:
+		&"high":
+			if _hit_high.is_empty():
+				_hit_high = make({"lean": -34.0, "head": -30.0, "fs": -40.0, "fe": 60.0, "bs": -62.0, "be": 40.0, "fh": 20.0, "fk": 18.0, "bh": -24.0, "bk": 8.0})
+			pose = _hit_high.duplicate()
+		&"low":
+			if _hit_low.is_empty():
+				_hit_low = make({"lean": 22.0, "head": 8.0, "low": 9.0, "fs": 12.0, "fe": 70.0, "bs": -18.0, "be": 60.0, "fh": 34.0, "fk": 52.0, "bh": -10.0, "bk": 26.0})
+			pose = _hit_low.duplicate()
+		_:
+			pose = _hit_pose().duplicate()
 	pose["lean"] += sin(t * 40.0) * 4.0
 	return pose
 
@@ -131,6 +145,8 @@ static func _attack_table() -> Dictionary:
 			make({"fs": 150.0, "fe": 22.0, "lean": -8.0, "head": -12.0, "low": -3.0, "fh": 8.0, "bh": -14.0})],
 		&"kick": [make({"fh": 60.0, "fk": 105.0, "lean": -4.0, "fs": 10.0, "fe": 120.0}),
 			make({"fh": 92.0, "fk": 0.0, "lean": -18.0, "bh": -6.0, "bk": 12.0, "fs": 0.0, "fe": 120.0, "bs": -20.0, "be": 90.0})],
+		&"low_kick": [make({"fh": 56.0, "fk": 98.0, "lean": 3.0, "fs": 12.0, "fe": 125.0, "bs": 26.0, "be": 112.0}),
+			make({"fh": 58.0, "fk": 4.0, "lean": 13.0, "low": 4.0, "fs": -12.0, "fe": 98.0, "bs": 46.0, "be": 92.0, "bk": 20.0})],
 		&"high_kick": [make({"fh": 70.0, "fk": 115.0, "lean": -8.0, "fs": 10.0, "fe": 120.0}),
 			make({"fh": 122.0, "fk": 0.0, "lean": -34.0, "bh": -8.0, "bk": 10.0, "fs": -25.0, "fe": 80.0, "bs": 40.0, "be": 70.0})],
 		&"spin_kick": [make({"fh": 40.0, "fk": 90.0, "lean": 10.0, "flip": 1.0, "fs": -20.0, "bs": 40.0}),

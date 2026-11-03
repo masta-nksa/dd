@@ -14,7 +14,7 @@ func _physics_process(_delta: float) -> void:
 		Input.get_axis(p + "up", p + "down"))
 	if Input.is_action_just_pressed(p + "jump"):
 		fighter.request_jump()
-	for kind in [&"punch", &"kick", &"special"]:
+	for kind in [&"punch", &"kick", &"kick_high", &"special"]:
 		if Input.is_action_just_pressed(p + kind):
 			fighter.request_attack(kind)
 	if Input.is_action_just_pressed(p + "grab"):

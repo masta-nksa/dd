@@ -22,13 +22,13 @@ static var debug_boxes := false
 
 const FRICTION := 700.0
 const REQUEST_WINDOW := 0.25
-const HITSTOP := 0.07
 const LIE_TIME := 0.7
 const GETUP_TIME := 0.4
 const RESPAWN_DELAY := 1.6
 const RESPAWN_HEIGHT := 330.0
 const RESPAWN_SAFE_TIME := 2.5
 const COMBO_TIME := 1.2
+const TRAIL_POINTS := 6
 
 var skin: Dictionary = Skins.KAI
 var fighter_id: StringName = &""   # gewählter Kämpfer (`FighterData`); leer = nur 2D-Figur
@@ -74,6 +74,8 @@ var _request: StringName = &""
 var _request_timer := 0.0
 var _air_attack := false
 var _hit_time := 0.3
+var _hit_level: StringName = &"mid"
+var _trail: Array[Vector2] = []   # letzte Punkte des schlagenden Glieds
 var _state_time := 0.0
 var _landed := false
 var _freeze_time := 0.0
@@ -103,7 +105,7 @@ func setup(start_x: float, start_z: float, new_bounds: Rect2) -> void:
 func request_jump() -> void:
 	_jump_requested = true
 
-## kind: &"punch", &"kick" oder &"special"
+## kind: &"punch", &"kick" (Low Kick), &"kick_high" oder &"special"
 func request_attack(kind: StringName) -> void:
 	_request = kind
 	_request_timer = REQUEST_WINDOW
@@ -226,7 +228,9 @@ func _start_requested_attack() -> bool:
 		&"punch":
 			start_attack(&"w_bat1" if armed else &"punch1")
 		&"kick":
-			start_attack(&"kick")
+			start_attack(&"kick_low")
+		&"kick_high":
+			start_attack(&"kick_high")
 		&"special":
 			if armed:
 				start_attack(&"w_homerun")
@@ -246,6 +250,7 @@ func start_attack(id: StringName) -> void:
 	_thrown = false
 	hit_box.hit_props.clear()
 	attack_time = 0.0
+	_trail.clear()
 	_air_attack = pos_y > 0.0
 	_request = &""
 	_request_timer = 0.0
@@ -281,12 +286,12 @@ func _tick_attack(delta: float) -> void:
 			return
 	else:
 		_slide(delta)
-	# Combo: Anfrage während der Erholung startet den nächsten Schlag der Kette
+	# Combo: Anfrage während der Erholung startet den nächsten Angriff, den die Tabelle zu dieser Taste nennt
 	if a.drive > 0.0 and hit_box.active:
 		vel_x = facing * a.drive
-	if attack_time >= a.startup + a.active and _request == &"punch" and a.chain_to != &"" \
+	if attack_time >= a.startup + a.active and a.chains.has(_request) \
 			and (not a.chain_needs_hit or not hit_box.hit_targets.is_empty()):
-		start_attack(a.chain_to)
+		start_attack(a.chains[_request])
 		return
 	if attack_time >= a.total_time():
 		_end_attack(State.JUMP if _air_attack else State.IDLE)
@@ -436,9 +441,10 @@ func take_hit(a: AttackData, from: Fighter, from_x := NAN) -> bool:
 	hit_box.active = false
 	attack = null
 	_air_attack = false
-	_freeze_time = HITSTOP
+	_freeze_time = a.hitstop
 	if is_nan(from_x):
-		from._freeze_time = HITSTOP
+		from._freeze_time = a.hitstop
+	_hit_level = a.hit_level
 	_flash_time = 0.12
 	last_attacker = from
 	if carried != null and (carried.heavy or current_health <= 0):
@@ -480,7 +486,7 @@ func current_pose() -> Dictionary:
 		State.JUMP:
 			return Poses.jump()
 		State.HIT:
-			return Poses.hit(_state_time)
+			return Poses.hit(_state_time, _hit_level)
 		State.KNOCKDOWN:
 			return Poses.lying() if _landed else Poses.fall(minf(_state_time / 0.45, 1.0))
 		State.DEAD:
@@ -510,9 +516,12 @@ func _draw() -> void:
 		if _flash_time > 0.0:   # zittert beim Treffer
 			jitter = 2.0 if int(_flash_time * 120.0) % 2 == 0 else -2.0
 		if model != null:
-			var pose := current_pose()
-			model.set_pose(pose, facing, _flash_time > 0.06)
+			if state == State.ATTACK and attack != null and model.has_clip(attack.id):
+				model.set_clip(attack.id, attack.phase_at(attack_time), facing, _flash_time > 0.06)
+			else:
+				model.set_pose(current_pose(), facing, _flash_time > 0.06)
 			model.draw(self, jitter, 0.0, body_scale)
+			_draw_trail()
 			if carried != null:
 				var h := model.hands(body_scale)
 				_hold_carried(h[0], h[1], h[2], h[3], body_scale)
@@ -523,6 +532,22 @@ func _draw() -> void:
 			Art.text(self, "%dP" % player_number, 20.0, Vector2(0.0, -FigureArt.HEIGHT * body_scale - 14.0), body_color)
 	if debug_boxes:
 		_draw_debug()
+
+## Bewegungsspur hinter Fuss oder Faust, vom Ende des Anlaufs bis kurz nach dem Treffer.
+func _draw_trail() -> void:
+	if state != State.ATTACK or attack == null or attack.trail == &"" or model == null:
+		_trail.clear()
+		return
+	var phase := attack.phase_at(attack_time)
+	if phase < 0.45 or phase > 2.2:
+		_trail.clear()
+		return
+	_trail.append(model.strike_point(attack.trail, body_scale))
+	if _trail.size() > TRAIL_POINTS:
+		_trail.remove_at(0)
+	for i in range(1, _trail.size()):
+		var f := float(i) / float(TRAIL_POINTS)
+		draw_line(_trail[i - 1], _trail[i], Color(1.0, 1.0, 0.92, 0.55 * f), lerpf(1.5, 7.0, f) * body_scale, true)
 
 ## Zeichnet das Getragene in die Hände (Port von `zeichne_in_hand`).
 func _hold_carried(hand: Vector2, elbow: Vector2, other_hand: Vector2, _other_elbow: Vector2, s: float) -> void:

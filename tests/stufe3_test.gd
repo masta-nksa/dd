@@ -83,11 +83,11 @@ func _init() -> void:
 	await frames(90)
 	pruefe(d.state == Fighter.State.IDLE, "Puppe steht wieder auf")
 
-	# 5) Tritt
+	# 5) Low Kick
 	await aufstellen(szene)
 	f1.request_attack(&"kick")
 	await frames(30)
-	pruefe(d.current_health == 86, "Tritt macht 14 Schaden (Puppe %d)" % d.current_health)
+	pruefe(d.current_health == 90, "Low Kick macht 10 Schaden (Puppe %d)" % d.current_health)
 
 	# 6) Spezial trifft auch hinter dem Spieler und kostet 4 LP
 	await aufstellen(szene)

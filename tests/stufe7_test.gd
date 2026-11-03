@@ -168,7 +168,7 @@ func test_werte_im_kampf() -> void:
 	pruefe(schnell.damage == roundi(basis.damage * 1.08) and absf(schnell.startup - basis.startup / 1.25) < 0.0001
 		and absf(schnell.reach - basis.reach * 1.15) < 0.0001 and absf(schnell.box_size.x - basis.box_size.x * 1.15) < 0.0001,
 		"Schaden, Tempo und Reichweite werden angewandt")
-	pruefe(schnell.chain_to == basis.chain_to and schnell.pose == basis.pose and schnell.knockback == basis.knockback, "Alles andere bleibt")
+	pruefe(schnell.chains == basis.chains and schnell.pose == basis.pose and schnell.knockback == basis.knockback, "Alles andere bleibt")
 	pruefe(basis.damage == 10 and basis.startup == 0.06, "Die gemeinsame Vorlage bleibt unverändert")
 	Main.waves_enabled = false
 	Main.props_enabled = false

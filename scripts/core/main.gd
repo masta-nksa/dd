@@ -144,14 +144,15 @@ func _on_hit_landed(attacker: Fighter, target: Fighter, attack: AttackData) -> v
 	if attacker.team == 0 and target.team != 0:
 		attacker.count_hit(attack)
 	hud.note_hit(target)
-	camera_rig.shake(6.0 if knocked else 2.0)
+	var heavy := attack.hitstop >= 0.1   # kräftige Treffer rütteln stärker und sprühen mehr Funken
+	camera_rig.shake(6.0 if knocked else 4.0 if heavy else 2.0)
 	# Der Funke sitzt in der Mitte der Überschneidung von Schlag und Körper, bei Würfen an der Figur
 	var at := Vector3(target.pos_x, target.pos_y + 50.0 * target.body_scale, target.pos_z)
 	if attacker.hit_box.active:
 		var overlap := attacker.hit_box.world_box().intersection(target.hurt_box.world_box())
 		if overlap.has_volume():
 			at = overlap.get_center()
-	items.effects.spark(at.x, at.z, at.y, knocked)
+	items.effects.spark(at.x, at.z, at.y, knocked or heavy)
 
 func _on_dummy_died() -> void:
 	await get_tree().create_timer(2.5).timeout

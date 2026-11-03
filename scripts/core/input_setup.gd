@@ -4,17 +4,17 @@ class_name InputSetup
 
 const BELEGUNG := {
 	1: {"left": KEY_A, "right": KEY_D, "up": KEY_W, "down": KEY_S, "jump": KEY_SPACE,
-		"punch": KEY_F, "kick": KEY_G, "special": KEY_R, "grab": KEY_E},
+		"punch": KEY_F, "kick": KEY_G, "kick_high": KEY_T, "special": KEY_R, "grab": KEY_E},
 	2: {"left": KEY_LEFT, "right": KEY_RIGHT, "up": KEY_UP, "down": KEY_DOWN, "jump": KEY_O,
-		"punch": KEY_K, "kick": KEY_L, "special": KEY_I, "grab": KEY_J},
+		"punch": KEY_K, "kick": KEY_L, "kick_high": KEY_U, "special": KEY_I, "grab": KEY_J},
 }
 
-const PAD_BUTTONS := {"jump": [JOY_BUTTON_A], "punch": [JOY_BUTTON_X, JOY_BUTTON_LEFT_SHOULDER], "kick": [JOY_BUTTON_B],
+const PAD_BUTTONS := {"jump": [JOY_BUTTON_A], "punch": [JOY_BUTTON_X], "kick": [JOY_BUTTON_B], "kick_high": [JOY_BUTTON_LEFT_SHOULDER],
 	"special": [JOY_BUTTON_Y], "grab": [JOY_BUTTON_RIGHT_SHOULDER], "left": [JOY_BUTTON_DPAD_LEFT],
 	"right": [JOY_BUTTON_DPAD_RIGHT], "up": [JOY_BUTTON_DPAD_UP], "down": [JOY_BUTTON_DPAD_DOWN]}
 const PAD_AXES := {"left": [JOY_AXIS_LEFT_X, -1.0], "right": [JOY_AXIS_LEFT_X, 1.0],
 	"up": [JOY_AXIS_LEFT_Y, -1.0], "down": [JOY_AXIS_LEFT_Y, 1.0]}
-const PAD_HINTS := {"jump": "A", "punch": "X", "kick": "B", "special": "Y", "grab": "RB"}
+const PAD_HINTS := {"jump": "A", "punch": "X", "kick": "B", "kick_high": "LB", "special": "Y", "grab": "RB"}
 
 static var _done := false
 
