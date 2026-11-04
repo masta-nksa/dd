@@ -43,6 +43,8 @@ const LOOKS := {
 	],
 	&"boss": [
 		{"model": &"boss", "colors": {}},
+		{"model": &"boss", "colors": {"top": Color8(120, 24, 40), "trim": Color8(84, 14, 28), "pants": Color8(30, 22, 30),
+			"hair": Color8(200, 200, 210), "belt": Color8(230, 200, 70)}},
 	],
 }
 

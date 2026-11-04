@@ -14,11 +14,15 @@ const HOUSE_BOTTOM := 300    # hier beginnt der Gehsteig
 const KERB := 352            # hier beginnt die Fahrbahn
 const FAR_WIDTH := int(SCREEN_W + (WIDTH - SCREEN_W) * PARALLAX) + 4
 const ZONES := [[0, 1900, &"old_town"], [1900, 3700, &"industry"], [3700, WIDTH, &"harbour"]]
+const ZONES_2 := [[0, 1900, &"alley"], [1900, 3700, &"market"], [3700, WIDTH, &"temple"]]
+const SIGNS_2 := ["NUDELN", "TEE", "DIM SUM", "MARKT", "APOTHEKE", "KARAOKE", "MASSAGE"]
+const LANTERN := [Color8(220, 40, 40), Color8(240, 90, 40), Color8(250, 190, 50)]
 const GRAFFITI := ["ZACK!", "BOOM", "KAI+RIA", "WUMMS", "NKSA", "PAFF", "2P"]
 const SIGNS := ["PIZZA", "BAR", "ARCADE", "KEBAB", "KIOSK", "HOTEL", "DISCO"]
 const NEON := [Color8(255, 80, 180), Color8(80, 230, 255), Color8(255, 220, 60), Color8(120, 255, 120)]
 
 var layer := Layer.NEAR
+var theme := 1     # 1 = Altstadt, Industrie, Hafen; 2 = Chinatown
 var x_from := 0
 var x_to := WIDTH
 
@@ -31,7 +35,7 @@ static func zone_at(x: float) -> StringName:
 	return ZONES[-1][2]
 
 func _draw() -> void:
-	_r.seed = 1987 + int(layer)
+	_r.seed = 1987 + int(layer) + (theme - 1) * 100
 	_set_origin()
 	match layer:
 		Layer.SKY: _paint_sky()
@@ -117,8 +121,8 @@ func _text(value: String, size: float, pos: Vector2, c: Color, anchor := Art.Anc
 # ------------------------------------------------------------ Himmel
 
 func _paint_sky() -> void:
-	var top := Color8(16, 12, 38)
-	var bottom := Color8(150, 62, 82)
+	var top := Color8(16, 12, 38) if theme == 1 else Color8(14, 8, 34)
+	var bottom := Color8(150, 62, 82) if theme == 1 else Color8(130, 34, 64)
 	for y in SCREEN_H:
 		draw_rect(Rect2(0, y, SCREEN_W, 1), top.lerp(bottom, pow(minf(1.0, y / 300.0), 1.6)))
 	for i in 90:
@@ -126,7 +130,7 @@ func _paint_sky() -> void:
 		var y := _r.randi_range(0, 199)
 		var light := _r.randi_range(120, 255)
 		draw_rect(Rect2(x, y, 1, 1), Color8(light, light, light))
-	draw_circle(Vector2(780, 70), 30.0, Color8(250, 240, 210))
+	draw_circle(Vector2(780, 70), 30.0, Color8(250, 240, 210) if theme == 1 else Color8(255, 190, 150))
 	draw_circle(Vector2(770, 62), 6.0, Color8(232, 220, 190))
 	draw_circle(Vector2(790, 82), 4.0, Color8(232, 220, 190))
 
@@ -134,7 +138,7 @@ func _paint_sky() -> void:
 
 func _paint_far() -> void:
 	# zwei Reihen: hinten dunkler und höher
-	var rows := [[Color8(44, 30, 70), 120, 230, Color8(90, 80, 120)], [Color8(30, 22, 52), 70, 160, Color8(200, 170, 90)]]
+	var rows := _far_rows()
 	for row in 2:
 		var color: Color = rows[row][0]
 		var window: Color = rows[row][3]
@@ -142,7 +146,7 @@ func _paint_far() -> void:
 		while x < FAR_WIDTH:
 			var b := _r.randi_range(50, 120)
 			var h := _r.randi_range(rows[row][1], rows[row][2])
-			var zone := zone_at(x / PARALLAX)
+			var zone := _zone(x / PARALLAX)
 			var top := HOUSE_BOTTOM - h
 			if zone == &"industry" and row == 1 and _r.randf() < 0.4:
 				# Fabrik mit Schornstein
@@ -156,6 +160,8 @@ func _paint_far() -> void:
 				_line(x + 25, top - 20, x + 100, top + 8, color, 2.0)
 				_line(x + 25, top - 20, x - 30, top + 8, color, 2.0)
 				_line(x + 90, top + 8, x + 90, top + 60, color)
+			elif zone == &"temple" and row == 0 and _r.randf() < 0.45:
+				_paint_pagoda(x, HOUSE_BOTTOM, color)
 			else:
 				_rect(x, top, b, h, color)
 				if _r.randf() < 0.3:
@@ -308,30 +314,164 @@ func _paint_harbour(x: int, width: int, last: bool) -> void:
 		_line(x + 20, y, x + width - 20, y, Color8(74, 78, 86), 2.0)
 	_text(str(_r.randi_range(1, 6)), 40, Vector2(x + width * 0.5, top2 + 36), Color8(240, 240, 240))
 
+
+# ------------------------------------------------------------ Level 2: Chinatown
+
+func _paint_lantern(x: float, y: float, r: float) -> void:
+	var color: Color = _pick(LANTERN)
+	_line(x, y - r - 7.0, x, y - r, Color8(40, 24, 24), 2.0)
+	_circle(x, y + r * 0.2, r * 2.4, Color(color.r, color.g, color.b, 0.16))
+	_ellipse(x - r, y - r, r * 2.0, r * 2.4, color)
+	_rect(x - r * 0.5, y - r - 2.0, r, 3.0, Color8(220, 180, 60))
+	_rect(x - r * 0.5, y + r * 1.4, r, 2.0, Color8(220, 180, 60))
+	_line(x, y + r * 1.4, x, y + r * 1.4 + 7.0, Color8(220, 180, 60))
+
+func _paint_alley(x: int, width: int) -> void:
+	var height := _r.randi_range(190, 290)
+	var top := HOUSE_BOTTOM - height
+	var wall: Color = _pick([Color8(104, 32, 36), Color8(80, 36, 44), Color8(60, 44, 70), Color8(96, 60, 36)])
+	_rect(x, top, width, height, wall)
+	# Dach mit Ziegeln
+	_rect(x - 6, top - 10, width + 12, 12, Color8(36, 28, 34))
+	for tx in range(x - 6, x + width + 6, 10):
+		_line(tx, top - 10, tx, top + 2, Color8(64, 52, 58))
+	# Holzgitterfenster mit Balkon
+	var wood := Color8(30, 18, 18)
+	for fy in range(top + 26, HOUSE_BOTTOM - 112, 54):
+		for fx in range(x + 20, x + width - 44, 56):
+			var glass := Color8(255, 196, 110) if _r.randf() < 0.5 else Color8(40, 28, 44)
+			_rect(fx - 4, fy - 4, 36, 44, wood)
+			_rect(fx, fy, 28, 36, glass)
+			for gx in range(fx + 7, fx + 28, 7):
+				_line(gx, fy, gx, fy + 36, wood)
+			_line(fx, fy + 18, fx + 28, fy + 18, wood, 2.0)
+			_rect(fx - 6, fy + 40, 40, 4, Color8(130, 40, 30))
+	# Ladenfront mit roter Blende und goldener Schrift
+	var left := x + 14
+	var right := x + width - 14
+	var shop_top := HOUSE_BOTTOM - 84
+	_rect(left, shop_top, right - left, 84, Color8(30, 20, 24))
+	_rect(left + 8, shop_top + 18, right - left - 16, 58, Color8(255, 190, 100) if _r.randf() < 0.5 else Color8(70, 100, 120))
+	_rect(left - 4, shop_top - 16, right - left + 8, 16, Color8(120, 30, 30))
+	_text(_pick(SIGNS_2), 24, Vector2((left + right) * 0.5, shop_top - 8), Color8(255, 214, 80))
+	for lx in range(left + 20, right - 10, 56):
+		_paint_lantern(lx, shop_top - 34, 7.0)
+	_line(x, top, x, HOUSE_BOTTOM, Art.darker(wall, 0.5), 2.0)
+
+func _paint_market(x: int, width: int) -> void:
+	_rect(x, HOUSE_BOTTOM - 200, width, 200, Color8(46, 30, 52))
+	_line(x, HOUSE_BOTTOM - 182, x + width, HOUSE_BOTTOM - 182, Color8(30, 20, 30))
+	for sx in range(x + 8, x + width - 8, 22):   # Lichterkette
+		var bulb: Color = _pick(LANTERN)
+		_circle(sx, HOUSE_BOTTOM - 178 + sin(float(sx - x) * 0.04) * 5.0, 3.5, Art.lighter(bulb, 0.3))
+	var stall_x := x + 12
+	while stall_x < x + width - 90:
+		var w := _r.randi_range(80, 110)
+		var color: Color = _pick([Color8(200, 50, 50), Color8(230, 170, 40), Color8(60, 150, 80)])
+		for i in range(0, w, 14):
+			_poly([Vector2(stall_x + i, HOUSE_BOTTOM - 112), Vector2(stall_x + i + 14, HOUSE_BOTTOM - 112),
+				Vector2(stall_x + i + 17, HOUSE_BOTTOM - 90), Vector2(stall_x + i + 3, HOUSE_BOTTOM - 90)],
+				color if (i / 14) % 2 == 0 else Color8(240, 230, 210))
+		_rect(stall_x + 2, HOUSE_BOTTOM - 90, 5, 90, Color8(70, 44, 30))
+		_rect(stall_x + w - 7, HOUSE_BOTTOM - 90, 5, 90, Color8(70, 44, 30))
+		_rect(stall_x, HOUSE_BOTTOM - 34, w, 34, Color8(110, 70, 40))
+		for gx in range(stall_x + 8, stall_x + w - 8, 14):
+			_circle(gx, HOUSE_BOTTOM - 40, 6.0, _pick([Color8(220, 60, 40), Color8(240, 190, 50), Color8(110, 190, 70)]))
+		_paint_lantern(stall_x + w * 0.5, HOUSE_BOTTOM - 128, 7.0)
+		stall_x += w + _r.randi_range(10, 40)
+
+func _paint_temple(x: int, width: int) -> void:
+	var top := HOUSE_BOTTOM - 170
+	_rect(x + 10, top + 40, width - 20, 130, Color8(120, 30, 34))
+	for cx in range(x + 16, x + width - 10, 48):
+		_rect(cx, top + 40, 12, 130, Color8(160, 44, 38))
+	_poly([Vector2(x - 20, top + 46), Vector2(x + width + 20, top + 46), Vector2(x + width - 10, top + 20),
+		Vector2(x + width * 0.5, top), Vector2(x + 10, top + 20)], Color8(34, 36, 50))
+	_line(x - 20, top + 46, x + width + 20, top + 46, Color8(220, 180, 60), 4.0)
+	var door_x := x + width / 2 - 24
+	_rect(door_x, HOUSE_BOTTOM - 90, 48, 90, Color8(40, 18, 18))
+	_frame(door_x, HOUSE_BOTTOM - 90, 48, 90, Color8(220, 180, 60), 3.0)
+	_paint_lantern(x + 30, HOUSE_BOTTOM - 100, 8.0)
+	_paint_lantern(x + width - 30, HOUSE_BOTTOM - 100, 8.0)
+
+func _paint_dojo(x: int, width: int) -> void:
+	# Am Ende: das Dojo des Bosses
+	var top := HOUSE_BOTTOM - 280
+	_rect(x, top + 60, width, 220, Color8(70, 26, 30))
+	_poly([Vector2(x - 24, top + 66), Vector2(x + width + 24, top + 66), Vector2(x + width - 20, top + 30),
+		Vector2(x + width * 0.5, top), Vector2(x + 20, top + 30)], Color8(30, 32, 46))
+	_line(x - 24, top + 66, x + width + 24, top + 66, Color8(220, 180, 60), 5.0)
+	var gate_y := HOUSE_BOTTOM - 170
+	_rect(x + 60, gate_y, width - 120, 170, Color8(40, 20, 20))
+	_line(x + width * 0.5, gate_y, x + width * 0.5, HOUSE_BOTTOM, Color8(90, 50, 30), 3.0)
+	_frame(x + 60, gate_y, width - 120, 170, Color8(220, 180, 60), 6.0)
+	_text("DOJO", 56, Vector2(x + width * 0.5, top + 118), Color8(255, 220, 80))
+	_paint_lantern(x + 30, HOUSE_BOTTOM - 150, 9.0)
+	_paint_lantern(x + width - 30, HOUSE_BOTTOM - 150, 9.0)
+
+func _paint_pagoda(x: int, base: int, color: Color) -> void:
+	for i in 4:
+		var half := (70 - i * 12) * 0.5
+		var y := base - i * 34
+		_poly([Vector2(x + 35 - half - 8, y), Vector2(x + 35 + half + 8, y), Vector2(x + 35 + half, y - 10), Vector2(x + 35 - half, y - 10)], color)
+		_rect(x + 35 - half * 0.8, y - 34, half * 1.6, 24, color)
+	_rect(x + 34, base - 4 * 34 - 14, 3, 18, color)
+
+func _far_rows() -> Array:
+	if theme == 2:
+		return [[Color8(46, 24, 60), 120, 230, Color8(140, 60, 80)], [Color8(34, 18, 48), 70, 160, Color8(255, 170, 90)]]
+	return [[Color8(44, 30, 70), 120, 230, Color8(90, 80, 120)], [Color8(30, 22, 52), 70, 160, Color8(200, 170, 90)]]
+
+func _zones() -> Array:
+	return ZONES_2 if theme == 2 else ZONES
+
+func _zone(x: float) -> StringName:
+	var zones := _zones()
+	for z in zones:
+		if x >= z[0] and x < z[1]:
+			return z[2]
+	return zones[-1][2]
+
+func _pavement() -> Dictionary:
+	if theme == 2:
+		return {&"alley": Color8(118, 104, 100), &"market": Color8(108, 100, 92), &"temple": Color8(112, 108, 104)}
+	return {&"old_town": Color8(120, 116, 124), &"industry": Color8(110, 108, 100), &"harbour": Color8(104, 108, 116)}
+
+func _road() -> Dictionary:
+	if theme == 2:
+		return {&"alley": Color8(50, 44, 52), &"market": Color8(58, 50, 46), &"temple": Color8(60, 56, 60)}
+	return {&"old_town": Color8(52, 50, 62), &"industry": Color8(60, 56, 54), &"harbour": Color8(64, 66, 72)}
+
 # ------------------------------------------------------------ Strasse
 
 func _zone_bands(y: float, h: float, colors: Dictionary) -> void:
-	for z in ZONES:
+	for z in _zones():
 		_rect(z[0], y, z[1] - z[0], h, colors[z[2]])
 
 func _paint_near() -> void:
 	# Häuserzeile
 	var x := 0
 	while x < WIDTH:
-		var zone := zone_at(x)
-		if zone == &"harbour" and x >= WIDTH - 700:
-			_paint_harbour(x, WIDTH - x, true)
+		var zone := _zone(x)
+		if zone == (&"temple" if theme == 2 else &"harbour") and x >= WIDTH - 700:
+			if theme == 2:
+				_paint_dojo(x, WIDTH - x)
+			else:
+				_paint_harbour(x, WIDTH - x, true)
 			break
 		var width := _r.randi_range(190, 320)
 		match zone:
 			&"old_town": _paint_old_town(x, width)
 			&"industry": _paint_industry(x, width)
+			&"alley": _paint_alley(x, width)
+			&"market": _paint_market(x, width)
+			&"temple": _paint_temple(x, width)
 			_: _paint_harbour(x, width, false)
 		x += width
 
 	# Gehsteig
 	_zone_bands(HOUSE_BOTTOM, KERB - HOUSE_BOTTOM,
-		{&"old_town": Color8(120, 116, 124), &"industry": Color8(110, 108, 100), &"harbour": Color8(104, 108, 116)})
+		_pavement())
 	for px in range(0, WIDTH, 48):
 		_line(px, HOUSE_BOTTOM, px - 18, KERB, Color8(88, 86, 94), 2.0)
 	_line(0, HOUSE_BOTTOM + 26, WIDTH, HOUSE_BOTTOM + 26, Color8(80, 78, 86))
@@ -343,7 +483,7 @@ func _paint_near() -> void:
 	# Fahrbahn
 	var top := KERB + 10
 	_zone_bands(top, SCREEN_H - top,
-		{&"old_town": Color8(52, 50, 62), &"industry": Color8(60, 56, 54), &"harbour": Color8(64, 66, 72)})
+		_road())
 	for i in 4000:
 		var px := _r.randi_range(0, WIDTH - 1)
 		var py := _r.randi_range(top, SCREEN_H - 1)
@@ -351,7 +491,7 @@ func _paint_near() -> void:
 		_rect(px, py, 1, 1, Color8(light, light, light + 6))
 	# Mittelstreifen und Details
 	for px in range(0, WIDTH, 120):
-		var stripe := Color8(230, 190, 50) if zone_at(px) == &"harbour" else Color8(230, 220, 200)
+		var stripe := Color8(230, 190, 50) if _zone(px) == (&"temple" if theme == 2 else &"harbour") else Color8(230, 220, 200)
 		_poly([Vector2(px, 446), Vector2(px + 64, 446), Vector2(px + 60, 452), Vector2(px - 4, 452)], stripe)
 	for px in range(0, WIDTH, 1400):
 		# Fussgängerstreifen

@@ -78,6 +78,14 @@ func spawn_projectile(thrower: Fighter, carry: Carry) -> Projectile:
 	projectiles.append(p)
 	return p
 
+## Räumt alles ab (beim Levelwechsel): Requisiten, Waffen, Beute und Geschosse.
+func clear_world() -> void:
+	for list: Array in [props, weapons, pickups, projectiles]:
+		for node in list.duplicate():
+			if is_instance_valid(node):
+				node.queue_free()
+		list.clear()
+
 func forget(node: Node) -> void:
 	if node is WeaponPickup:
 		weapons.erase(node)

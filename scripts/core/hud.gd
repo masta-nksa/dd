@@ -12,7 +12,6 @@ var camera: CameraRig
 var director: WaveDirector
 var banner_text := ""
 var banner_time := 0.0
-var go_time := 0.0
 var message := ""        # bleibt stehen (GAME OVER / GESCHAFFT)
 
 var _time := 0.0
@@ -25,9 +24,6 @@ var _hint: StyleBoxFlat
 func show_banner(text: String) -> void:
 	banner_text = text
 	banner_time = 2.0
-
-func show_go() -> void:
-	go_time = 3.0
 
 ## Ein Gegner wurde getroffen: Sein Balken erscheint oben in der Mitte.
 func note_hit(target: Fighter) -> void:
@@ -60,7 +56,6 @@ func _panel_rect(index: int) -> Rect2:
 func _process(delta: float) -> void:
 	_time += delta
 	banner_time = maxf(banner_time - delta, 0.0)
-	go_time = maxf(go_time - delta, 0.0)
 	_last_hit_time = maxf(_last_hit_time - delta, 0.0)
 	if _last_hit != null and not is_instance_valid(_last_hit):
 		_last_hit = null
@@ -98,8 +93,6 @@ func _draw() -> void:
 		Art.title(self, banner_text, 84.0, Vector2(480.0 + (1.0 - fly_in) * 960.0, 200.0))
 	if message != "":
 		Art.title(self, message, 84.0, Vector2(480.0, 200.0), Art.YELLOW if message != "GAME OVER" else Art.RED)
-	if go_time > 0.0 and int(go_time * 3.0) % 2 == 0:
-		_draw_go()
 
 func _draw_player(f: Fighter, rect: Rect2, number: int) -> void:
 	_panel.border_color = f.body_color
@@ -152,16 +145,8 @@ func _draw_enemies() -> void:
 	if _last_hit != null and _last_hit != boss and _last_hit_time > 0.0:
 		Art.text(self, _last_hit.skin["name"], 22.0, Vector2(480.0, 18.0), Color8(170, 240, 170))
 		draw_bar(self, Rect2(390.0, 30.0, 180.0, 12.0), _ratio(_last_hit), _trail.get(_last_hit, _ratio(_last_hit)), Color8(110, 220, 90))
-	elif director.is_wave_active():
-		Art.text(self, "WELLE %d/%d" % [director.index + 1, WaveDirector.WAVES.size()], 22.0, Vector2(480.0, 22.0), Art.GRAY)
-
-func _draw_go() -> void:
-	var x := 850.0 + sin(_time * 10.0) * 8.0
-	Art.text(self, "GO", 64.0, Vector2(x, 250.0), Art.YELLOW)
-	var arrow := PackedVector2Array([Vector2(x + 40.0, 230.0), Vector2(x + 70.0, 250.0), Vector2(x + 40.0, 270.0)])
-	draw_colored_polygon(arrow, Art.YELLOW)
-	arrow.append(arrow[0])
-	draw_polyline(arrow, Art.OUTLINE, 3.0)
+	else:
+		Art.text(self, "LEVEL %d" % director.level_index, 22.0, Vector2(480.0, 22.0), Art.GRAY)
 
 ## Kleine Taste über dem Ding, das man mit Greifen aufheben würde.
 func _draw_grab_hint(f: Fighter, player_number: int) -> void:

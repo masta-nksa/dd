@@ -7,7 +7,7 @@ const WIDTH := 5400.0
 const HEIGHT := 540.0
 const NEAR_CHUNK := 1800     # Stücke statt einer einzigen 5400 Pixel breiten Textur (Grenze auf manchen Geräten)
 
-## (Art, x, z) – z ist der Fusspunkt (Port von `REQUISITEN_PLAN`)
+## (Art, x, z) – z ist der Fusspunkt (Port von `REQUISITEN_PLAN`); Level 2 hat einen eigenen Plan
 const PROP_PLAN := [
 	[&"lamp", 300, 330], [&"crate", 760, 360], [&"bin", 1000, 340],
 	[&"lamp", 1120, 330], [&"barrel", 1560, 470], [&"crate", 1700, 345],
@@ -17,11 +17,29 @@ const PROP_PLAN := [
 	[&"barrel", 5000, 360], [&"lamp", 5300, 330],
 ]
 
-static var _textures := {}          # Schlüssel -> ImageTexture, bleibt über Runden hinweg
-static var _painted_headless := false
+## Level 2 (Chinatown): mehr Fässer und Tonnen, die Laternen hängen als Lampions am Wegrand
+const PROP_PLAN_2 := [
+	[&"lamp", 260, 330], [&"crate", 700, 350], [&"barrel", 980, 460], [&"bin", 1180, 340],
+	[&"lamp", 1400, 330], [&"crate", 1650, 480], [&"barrel", 1900, 350], [&"barrel", 1940, 372],
+	[&"lamp", 2200, 330], [&"bin", 2500, 345], [&"crate", 2760, 360], [&"barrel", 3050, 470],
+	[&"lamp", 3300, 330], [&"crate", 3560, 350], [&"crate", 3606, 350], [&"bin", 3900, 340],
+	[&"lamp", 4150, 330], [&"barrel", 4400, 360], [&"crate", 4700, 475], [&"lamp", 5000, 330],
+	[&"bin", 5250, 350],
+]
+
+static var _textures := {}          # "l<Level>_<Ebene>" -> ImageTexture, bleibt über Runden hinweg
+static var _painted_headless := {}  # Level -> true (headless bleiben die Texturen leer)
+
+var level_index := 1
 
 var _sky: Sprite2D
 var _far: Sprite2D
+
+static func prop_plan(number: int) -> Array:
+	return PROP_PLAN_2 if number == 2 else PROP_PLAN
+
+func _key(key: String) -> String:
+	return "l%d_%s" % [level_index, key]
 
 func _ready() -> void:
 	z_index = -4000
@@ -31,7 +49,7 @@ func _ready() -> void:
 	var chunks := int(WIDTH) / NEAR_CHUNK
 	for i in chunks:
 		_add_sprite("near%d" % i, float(i * NEAR_CHUNK), self)
-	if _textures.is_empty():
+	if not _textures.has(_key("sky")):
 		_paint_all(chunks)
 
 func _process(_delta: float) -> void:
@@ -50,15 +68,16 @@ func _add_sprite(key: String, x: float, parent: Node) -> Sprite2D:
 	sprite.name = key
 	sprite.centered = false
 	sprite.position.x = x
-	sprite.texture = _textures.get(key)
+	sprite.texture = _textures.get(_key(key))
 	parent.add_child(sprite)
 	return sprite
 
 func _paint_all(chunks: int) -> void:
 	var headless := DisplayServer.get_name() == "headless"
-	if headless and _painted_headless:
+	if headless and _painted_headless.has(level_index):
 		return
-	_painted_headless = headless
+	if headless:
+		_painted_headless[level_index] = true
 	var jobs := [
 		["sky", LevelPainter.Layer.SKY, 0, LevelPainter.SCREEN_W, LevelPainter.SCREEN_H],
 		["far", LevelPainter.Layer.FAR, 0, LevelPainter.FAR_WIDTH, LevelPainter.HOUSE_BOTTOM],
@@ -74,6 +93,7 @@ func _paint_all(chunks: int) -> void:
 		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		var painter := LevelPainter.new()
 		painter.layer = job[1]
+		painter.theme = level_index
 		painter.x_from = job[2]
 		painter.x_to = job[2] + job[3]
 		viewport.add_child(painter)
@@ -88,7 +108,7 @@ func _paint_all(chunks: int) -> void:
 		await RenderingServer.frame_post_draw
 		for i in jobs.size():
 			var key: String = jobs[i][0]
-			_textures[key] = ImageTexture.create_from_image(viewports[i].get_texture().get_image())
-			(get_node(key) as Sprite2D).texture = _textures[key]
+			_textures[_key(key)] = ImageTexture.create_from_image(viewports[i].get_texture().get_image())
+			(get_node(key) as Sprite2D).texture = _textures[_key(key)]
 	for viewport in viewports:
 		viewport.queue_free()

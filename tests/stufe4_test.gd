@@ -44,6 +44,7 @@ func lauf(zwei: bool, seed_wert: int, unsterblich: bool) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_wert
 	Main.waves_enabled = true
+	Main.level_count = 1
 	Main.props_enabled = true
 	Main.training_dummy = false
 	Main.two_players = zwei

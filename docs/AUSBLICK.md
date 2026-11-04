@@ -1,6 +1,6 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-03. Stufen 1–10 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe10_test.gd`, dazu `grafik_test.gd`).
+Stand: 2026-11-04. Stufen 1–11 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe11_test.gd`, dazu `grafik_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
@@ -25,14 +25,14 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 8. Kampfbewegungen: Clips aus Blender (bisher nur Bruce), Low Kick und High Kick, Combos quer über Schlag und Tritt, Trefferwirkung
 9. Baseballschläger: 3D-Modell in echter Länge, Schwünge mit beiden Händen (bisher nur Bruce), Abwehr und Konter
 10. Gegner als 3D-Modelle mit zufälligen Varianten (Schritt 1 des Gegner-Konzepts; Stilpakete, neue Typen und Bossphasen folgen)
+11. Nachschub statt Wellen, stärkere Gegner, zweites Level (Chinatown)
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
   (`thug` Schläger, `dasher` Flitzer, `brute` Brocken, `boss` Granit) mit Werten aus dem Pygame-Spiel; Boss mit Anlauf-Rammen.
 - Gegnerangriffe `g_*` in `Attacks`; neu in `AttackData`: `drive` (Rammen), `chain_needs_hit`. `Fighter` bekam `body_scale`, `weight`, `score`.
-- `scripts/core/wave_director.gd`: fünf Wellen wie im Pygame-Spiel (Level 5400 breit), Nachrücken, Extras bei 2 Spielern,
-  höchstens 2 Angreifer pro Spieler von beiden Seiten, tote Gegner verschwinden nach 1,6 s. Kamera bleibt während einer Welle stehen.
-- HUD: Banner «WELLE n», «LOS >>>», Punkte, «GESCHAFFT!» / «GAME OVER».
+- `scripts/core/wave_director.gd`: ursprünglich fünf Wellen wie im Pygame-Spiel, seit Stufe 11 Nachschub ohne Wellen (siehe dort); höchstens 3 Angreifer pro Spieler von beiden Seiten, tote Gegner verschwinden nach 1,6 s.
+- HUD: Banner, Punkte, «GESCHAFFT!» / «GAME OVER».
 - Tests: 6 Bot-Läufe (1 und 2 Spieler, 3 Zufallswerte) bis zum Levelende ohne Softlock (76–95 s).
 - Balance: Der einfache Bot (Dauerfeuer) gewinnt 28 von 28 sterblichen Läufen mit 48–80 LP Rest; ein Mensch spielt anders.
   Echte Schwierigkeit bitte von Hand prüfen. Nicht portiert: Hindernis-Umweg (`umweg`), weil es noch keine Kisten gibt (Stufe 5).
@@ -116,6 +116,15 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Leistung: `ModelFigure.set_active` rechnet das Teilbild nur für Figuren im Bild oder nahe daran (`Fighter._on_screen`, Puffer 260 px seitlich). F2 zeigt Bildzeit, Bildrate und die Zahl der gezeichneten 3D-Figuren (`PerfOverlay`). Lokal gemessen (Intel Arc, Fenster, ohne vsync): Welle mit 3 Gegnern und 2 Spielern im Mittel 5,4 ms, 95 % unter 8,4 ms; 12 Figuren allein kosten rund 2,8 ms.
 - Die Gegner nutzen weiter die `Poses` (noch keine Clips): `current_pose` und die g_-Angriffe sind unverändert.
 - Tests: `stufe10_test.gd` (Varianten, Zonen, Umfärben nur am eigenen Modell, Zählung, Bildrand, 2D-Ersatz).
+
+## Stufe 11 (Nachschub, stärkere Gegner, zweites Level) – Aufbau
+- Keine Wellen mehr: `WaveDirector` lässt laufend Gegner nachrücken. `budget()` = 3 + Fortschritt × (24 in Level 1, 30 in Level 2; ×1,4 zu zweit) + 1 je 10 s. Es erscheinen höchstens so viele Gegner, wie das Guthaben erlaubt, und höchstens `max_alive()` (3 bis 6, zu zweit +2) gleichzeitig.
+  Wer vorankommt, trifft also immer wieder auf neue Gegner, wer wartet, bekommt hin und wieder Besuch. Die Kamera bleibt nie stehen; Anzeigen «WELLE n» und «GO» sind weg, oben steht «LEVEL n».
+- Typenmischung nach Fortschritt (Brocken ab 20 % des Wegs, in Level 2 von Anfang an). Am Levelende (Bildrand ab `BOSS_X` = 4440) erscheint der Boss, dazu alle 6–9 s ein weiterer Gegner. Fällt der Boss, geben die übrigen auf (`_end_level`).
+- Stärke (`WaveDirector.LEVELS`, beim Erscheinen gesetzt, `Enemy.create` bleibt unverändert): Lebenspunkte ×1,5 (Level 2 ×1,9) und im Level bis ×1,25 mehr, Schaden ×1,3 (×1,5), Angriffspausen ×0,7 (×0,6), Boss in Level 2 ×1,3 Lebenspunkte. Drei Angreifer pro Spieler statt zwei. Das sind Startwerte, die Schwierigkeit prüft am besten der User von Hand.
+- Level 2 (`LevelPainter.theme` 2, `Level.level_index`): Chinatown bei Nacht mit Gasse (Lampions, Ladenfronten), Markt (Stände, Lichterkette) und Tempel mit Dojo am Ende, Pagoden in der Ferne, eigener Requisitenplan (`Level.PROP_PLAN_2`). Texturen je Level getrennt gemerkt. Boss «DRACHE» ist das Boss-Modell in anderen Farben (`EnemyLooks` Variante 1).
+- Levelwechsel in `Main._on_level_cleared`/`_start_level`: «LEVEL GESCHAFFT!», nach 3 s Start von Level 2 mit Punkten und Leben, vollen Lebenspunkten, ausgeschiedene Spieler steigen wieder ein. Sieg erst nach dem zweiten Boss; `Main.level_count` (Tests setzen 1) bestimmt die Zahl der Level.
+- Tests: `stufe11_test.gd` (Nachschub, Stärke, Boss, Levelwechsel, ganzer Bot-Lauf durch beide Level in rund 350 Spielsekunden). Die Bots der Stufen 4 und 7 laufen mit einem Level.
 
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.

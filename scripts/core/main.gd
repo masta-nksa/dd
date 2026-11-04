@@ -9,7 +9,8 @@ const WIN_DELAY := 4.0
 const LOSE_DELAY := 2.0
 const EXTRA_LIVES := 2
 
-static var waves_enabled := true       # Tests schalten die Wellen ab
+static var waves_enabled := true       # Tests schalten den Nachschub ab
+static var level_count := 2            # Anzahl der Level; Tests mit 1 sind kürzer
 static var training_dummy := false     # Trainingspuppe wie in Stufe 3
 static var two_players := true
 static var props_enabled := true       # Requisiten (Kisten, Fässer ...) aus dem Plan in `Level`
@@ -26,6 +27,7 @@ var hud: Hud
 var perf: PerfOverlay
 var game_over := false
 var play_time := 0.0
+var level_index := 1
 
 var _end_wait := 0.0
 var _ended := false
@@ -34,11 +36,12 @@ func _ready() -> void:
 	InputSetup.einrichten()
 	level = Level.new()
 	add_child(level)
+	level_index = 1
 
 	items = WorldItems.new()
 	add_child(items)
 	if props_enabled:
-		for entry in Level.PROP_PLAN:
+		for entry in Level.prop_plan(1):
 			items.add_prop(entry[0], float(entry[1]), float(entry[2]))
 
 	for i in (2 if two_players else 1):
@@ -108,9 +111,11 @@ func _ready() -> void:
 	hud.director = director
 	director.banner.connect(hud.show_banner)
 	director.banner.connect(func(_text: String): SoundBank.play(&"wave"))
-	director.go_hint.connect(hud.show_go)
+	director.level_cleared.connect(_on_level_cleared)
 	director.all_waves_done.connect(_on_all_waves_done)
 	add_child(director)
+	if waves_enabled:
+		director.begin_level(1, level_count <= 1)
 
 func _physics_process(delta: float) -> void:
 	if not waves_enabled or _ended:
@@ -127,6 +132,39 @@ func _physics_process(delta: float) -> void:
 	if _end_wait >= (LOSE_DELAY if game_over else WIN_DELAY):
 		_ended = true
 		run_ended.emit(not game_over)
+
+## Boss besiegt, es folgt das nächste Level: Punkte und Leben bleiben, die Lebenspunkte füllen sich auf.
+func _on_level_cleared() -> void:
+	hud.message = "LEVEL GESCHAFFT!"
+	SoundBank.play(&"win")
+	await get_tree().create_timer(3.0, false).timeout
+	if game_over or _ended:
+		return
+	hud.message = ""
+	_start_level(level_index + 1)
+
+func _start_level(number: int) -> void:
+	level_index = number
+	level.queue_free()
+	level = Level.new()
+	level.level_index = number
+	add_child(level)
+	move_child(level, 0)
+	director.level = level
+	items.clear_world()
+	for entry in Level.prop_plan(number):
+		items.add_prop(entry[0], float(entry[1]), float(entry[2]))
+	for i in fighters.size():
+		var f := fighters[i]
+		f.carried = null
+		f.revive()          # wer ausgeschieden war, steigt wieder ein
+		f.current_health = f.max_health
+		f.pos_x = 200.0 + i * 80.0
+		f.pos_z = 400.0 + i * 20.0
+		f.pos_y = 0.0
+	camera_rig.lock_x = -1.0
+	camera_rig.position.x = 480.0
+	director.begin_level(number, number >= level_count)
 
 func _on_all_waves_done() -> void:
 	if game_over:

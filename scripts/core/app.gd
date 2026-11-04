@@ -124,7 +124,6 @@ func _on_run_ended(won: bool) -> void:
 	mode = Mode.RESULT
 	game.hud.message = ""
 	game.hud.banner_time = 0.0
-	game.hud.go_time = 0.0
 	game.hud.queue_redraw()
 	var result := ResultScreen.new()
 	result.won = won

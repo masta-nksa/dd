@@ -39,7 +39,7 @@ func test_daten() -> void:
 			for zone in look["colors"]:
 				pruefe(look["colors"][zone] is Color, "%s: Zone %s ist eine Farbe" % [look["model"], zone])
 	pruefe(modelle.size() == 7, "Sieben Modelle: %s" % [modelle.keys()])
-	pruefe(farben.size() == 6 + 5 + 5 + 1, "Alle Varianten sind verschieden (%d)" % farben.size())
+	pruefe(farben.size() == 6 + 5 + 5 + 2, "Alle Varianten sind verschieden (%d)" % farben.size())
 	pruefe(ModelFigure.path_for(&"thug_cap") == "res://assets/characters/enemy_thug_cap.glb", "Pfad eines Gegner-Modells")
 	pruefe(ModelFigure.path_for(&"bruce") == FighterData.model_path(&"bruce"), "Kämpfer behalten ihren Pfad")
 	# Das 2D-Aussehen ohne Modell übernimmt die Farben der Variante
@@ -60,8 +60,8 @@ func test_gegner_ohne_modell() -> void:
 	var e := Enemy.create(&"dasher", 3)
 	pruefe(e.fighter_id == &"dasher_spiky" and e.palette["hair"] == Color8(255, 160, 40), "Feste Variante des Flitzers")
 	e.free()
-	var boss := Enemy.create(&"boss")
-	pruefe(boss.fighter_id == &"boss" and boss.palette.is_empty(), "Boss: ein Aussehen")
+	var boss := Enemy.create(&"boss", 0)
+	pruefe(boss.fighter_id == &"boss" and boss.palette.is_empty(), "Boss: Variante 0 ist das Grundmodell (Variante 1 ist der Drache aus Level 2)")
 	boss.free()
 	# Zufallswahl darf den Zufall des Spiels nicht verschieben
 	seed(1234)

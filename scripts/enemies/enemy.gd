@@ -33,6 +33,7 @@ var points := 0
 var may_attack := false   # vom Director gesetzt: darf ich zuschlagen?
 var side := 1             # auf welcher Seite des Ziels stehe ich?
 var reach_px := 44.0
+var pause_factor := 1.0   # kleiner = kürzere Pausen zwischen den Angriffen (Schwierigkeit, vom Director gesetzt)
 
 var _think_pause := randf_range(0.2, 0.6)
 var _attack_pause := randf_range(0.6, 1.2)
@@ -168,7 +169,7 @@ func _begin_attack(id: StringName) -> void:
 
 func _ai_attack_done() -> void:
 	var pause: Vector2 = data["pause"]
-	_attack_pause = randf_range(pause.x, pause.y)
+	_attack_pause = randf_range(pause.x, pause.y) * pause_factor
 	if randf() < 0.35:
 		_start_retreat()
 	else:
