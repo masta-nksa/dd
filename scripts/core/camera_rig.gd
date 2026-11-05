@@ -23,9 +23,12 @@ func _ready() -> void:
 	limit_top = 0
 	limit_bottom = int(Level.HEIGHT)
 	_rng.randomize()
+	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	make_current()
 
-func _process(delta: float) -> void:
+## Läuft im Physik-Takt wie die Kämpfer. Mit dem Bild-Takt bewegt sich die Kamera auf Bildschirmen über 60 Hz öfter als die Figuren,
+## und beim Gehen nach links und rechts ruckelt dann alles gegeneinander.
+func _physics_process(delta: float) -> void:
 	if _shake > 0.3:
 		offset = Vector2(_rng.randf_range(-1.0, 1.0), _rng.randf_range(-0.6, 0.6)) * _shake
 		_shake *= maxf(0.0, 1.0 - delta * 12.0)
