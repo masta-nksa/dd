@@ -8,10 +8,10 @@ extends Node
 ## und der Aufrufer zeichnet weiter mit `FigureArt`.
 
 const VIEW_SIZE := 256            # Pixel des Teilbilds (doppelt aufgelöst, wird auf die halbe Grösse gezeichnet)
+const LITE_VIEW_SIZE := 160       # Gegner: kleineres Teilbild, 2-fach geglättet und nur jedes zweite Bild neu gerechnet (Browser-Leistung)
 const VIEW_METERS := 2.42         # sichtbare Höhe in Metern
 const FEET_MARGIN := 0.25         # Meter zwischen Fusspunkt und unterem Bildrand
 const PX_PER_M := 52.8            # Spielpixel pro Meter: FigureArt ist 95 px für 1,8 m gross
-const DRAW_K := PX_PER_M * VIEW_METERS / VIEW_SIZE
 const HAND_EXTRA := 0.07          # vom Handgelenk bis zur Mitte der Faust
 const BLEND_FRAMES := 5           # so viele gezeichnete Bilder dauert der Übergang von und zu einem Clip
 const AIR_CLIPS: Array[StringName] = [&"jump_kick"]   # ohne stehenden Fuss: hier gilt der tiefste Fuss als Boden
@@ -26,6 +26,8 @@ var fighter_id: StringName
 var skeleton: Skeleton3D
 
 var _viewport: SubViewport
+var lite := false             # Gegner: kleineres Teilbild, nur jedes zweite Bild neu gerechnet
+var _view_size := VIEW_SIZE
 var _outer: Node3D            # Versatz in Bildschirmrichtung (Fallen)
 var _pivot: Node3D            # Kippen um die Bildachse (turn)
 var _model: Node3D            # Blickrichtung (Drehung um die Hochachse), Bodenabstand
@@ -60,13 +62,15 @@ static func bat_available() -> bool:
 static func available(id: StringName) -> bool:
 	return (force or DisplayServer.get_name() != "headless") and ResourceLoader.exists(path_for(id))
 
-static func create(id: StringName) -> ModelFigure:
+static func create(id: StringName, is_lite := false) -> ModelFigure:
 	if not available(id):
 		return null
 	var scene := load(path_for(id)) as PackedScene
 	if scene == null:
 		return null
 	var figure := ModelFigure.new()
+	figure.lite = is_lite
+	figure._view_size = LITE_VIEW_SIZE if is_lite else VIEW_SIZE
 	if not figure._build(id, scene.instantiate()):
 		figure.free()
 		return null
@@ -79,11 +83,11 @@ func _build(id: StringName, instance: Node) -> bool:
 		instance.free()
 		return false
 	_viewport = SubViewport.new()
-	_viewport.size = Vector2i(VIEW_SIZE, VIEW_SIZE)
+	_viewport.size = Vector2i(_view_size, _view_size)
 	_viewport.transparent_bg = true
 	_viewport.own_world_3d = true
-	_viewport.msaa_3d = Viewport.MSAA_4X
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_viewport.msaa_3d = Viewport.MSAA_2X if lite else Viewport.MSAA_4X
+	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if lite else SubViewport.UPDATE_ALWAYS
 	add_child(_viewport)
 	_outer = Node3D.new()
 	_pivot = Node3D.new()
@@ -229,7 +233,17 @@ func set_active(on: bool) -> void:
 		return
 	_active = on
 	active_count += 1 if on else -1
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on and not lite else SubViewport.UPDATE_DISABLED
+
+## Gegner rechnen ihr Teilbild nur jedes zweite Bild neu (verschoben nach Figur, damit nicht alle im selben Bild dran sind).
+## Gibt true zurück, wenn jetzt Haltung und Teilbild erneuert werden sollen; das Teilbild wird dann einmal gerechnet.
+func update_due() -> bool:
+	if not lite:
+		return true
+	if (Engine.get_physics_frames() + get_instance_id()) % 2 != 0 and _source != &"":
+		return false
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	return true
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and _active:
@@ -377,6 +391,6 @@ func _lowest_foot() -> float:
 
 ## Zeichnet das Bild mit dem Fusspunkt bei (x, y); k = Körpergrösse (`Fighter.body_scale`).
 func draw(ci: CanvasItem, x: float, y: float, k := 1.0) -> void:
-	var size := VIEW_SIZE * DRAW_K * k
-	var feet_v := (VIEW_SIZE - FEET_MARGIN * VIEW_SIZE / VIEW_METERS) * DRAW_K * k
+	var size := PX_PER_M * VIEW_METERS * k
+	var feet_v := PX_PER_M * (VIEW_METERS - FEET_MARGIN) * k
 	ci.draw_texture_rect(_viewport.get_texture(), Rect2(Vector2(x - size * 0.5, y - feet_v), Vector2(size, size)), false)

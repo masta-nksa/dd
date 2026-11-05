@@ -102,7 +102,7 @@ func _init() -> void:
 func _ready() -> void:
 	current_health = max_health
 	if fighter_id != &"":
-		model = ModelFigure.create(fighter_id)
+		model = ModelFigure.create(fighter_id, team != 0)
 		if model != null:
 			if not palette.is_empty():
 				model.apply_palette(palette)
@@ -593,6 +593,16 @@ func _draw_model(jitter: float) -> void:
 	model.set_active(on_screen)
 	if not on_screen:
 		return
+	if model.update_due():
+		_pose_model()
+	model.draw(self, jitter, 0.0, body_scale)
+	_draw_trail()
+	if carried != null and (carried.heavy or not model.has_bat()):
+		var h := model.hands(body_scale)
+		_hold_carried(h[0], h[1], h[2], h[3], body_scale)
+
+## Stellt das 3D-Modell in die Haltung des Zustands (Gegner nur jedes zweite Bild, siehe `ModelFigure.update_due`).
+func _pose_model() -> void:
 	model.show_bat(carried.ratio() if carried != null and not carried.heavy else -1.0)
 	if state == State.ATTACK and attack != null and model.has_clip(attack.id):
 		model.set_clip(attack.id, attack.phase_at(attack_time), facing, _flash_time > 0.06)
@@ -600,11 +610,6 @@ func _draw_model(jitter: float) -> void:
 		model.set_clip(&"w_block", _block_phase(), facing, _flash_time > 0.06)
 	else:
 		model.set_pose(current_pose(), facing, _flash_time > 0.06)
-	model.draw(self, jitter, 0.0, body_scale)
-	_draw_trail()
-	if carried != null and (carried.heavy or not model.has_bat()):
-		var h := model.hands(body_scale)
-		_hold_carried(h[0], h[1], h[2], h[3], body_scale)
 
 ## Ob die Figur im Bild oder nahe daran steht: Nur dann wird ihr 3D-Teilbild gezeichnet.
 func _on_screen() -> bool:

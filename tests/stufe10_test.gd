@@ -138,7 +138,7 @@ func test_modelle() -> void:
 	f.model.set_active(false)
 	pruefe(ModelFigure.active_count == davor - 1, "Doppeltes Ausschalten zählt nicht doppelt")
 	f.model.set_active(true)
-	pruefe(ModelFigure.active_count == davor and f.model._viewport.render_target_update_mode == SubViewport.UPDATE_ALWAYS, "Wieder an")
+	pruefe(ModelFigure.active_count == davor and f.model._active and f.model._viewport.render_target_update_mode == SubViewport.UPDATE_DISABLED, "Wieder an (Gegner rechnen nur auf Anforderung)")
 	f.position = Vector2(480.0, 420.0)
 	pruefe(f._on_screen(), "Bildmitte gilt als im Bild")
 	f.position = Vector2(-200.0, 420.0)
