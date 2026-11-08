@@ -24,6 +24,7 @@ Zeitachse: Jeder Clip dauert 3 Sekunden: 0–1 Anlauf, 1–2 Treffer, 2–3 Erho
 Zeiten des Angriffs (`AttackData`) darauf ab; so bleibt der Treffermoment bei jedem Angriffstempo exakt.
 """
 import math
+import os
 
 import bpy
 from bpy_extras import anim_utils
@@ -32,7 +33,21 @@ from mathutils import Matrix, Quaternion, Vector
 PX_PER_M = 52.8     # wie `ModelFigure.PX_PER_M`
 HAND_EXTRA = 0.07   # wie `ModelFigure.HAND_EXTRA`: vom Handgelenk bis zur Mitte der Faust
 FPS = 60
-CLIP_FIGHTERS = ("bruce",)
+BRUCE_ARM = 0.47         # Oberarm + Unterarm in Metern, Schulterhöhe: Bezug der Griffpunkte der Schläger-Clips
+BRUCE_SHOULDER_Z = 1.36
+CLIP_FIGHTERS = ("bruce",)          # alle Clips: Kampfbewegungen und Schläger
+# Nur die Schläger-Clips (w_*): alle übrigen Kämpfer und die Gegner, damit auch sie den Schläger wie Bruce schwingen
+BAT_CLIP_FIGHTERS = ("chuck", "jackie", "jcvd", "kai", "ria", "bruno", "mika",
+                     "thug", "dasher", "brute", "boss", "thug_cap", "dasher_spiky", "brute_bare")
+
+
+def clip_ids(name):
+    """Welche Clips eine Figur bekommt: alle, nur die Schläger-Clips oder keine."""
+    if name in CLIP_FIGHTERS:
+        return list(CLIPS)
+    if name in BAT_CLIP_FIGHTERS:
+        return [c for c, clip in CLIPS.items() if clip.get("bat")]
+    return []
 
 STANCE = dict(lean=6.0, head=0.0, pitch=0.0, yaw=0.0, twist=0.0, shift=0.0, low=2.0,
               fs=28.0, fe=110.0, fsl=0.0, fel=0.0, bs=12.0, be=120.0, bsl=0.0, bel=0.0,
@@ -228,6 +243,10 @@ class ClipRig:
         self.order = [b.name for b in bones]
         self.child = {"upper_arm": "forearm", "forearm": "hand", "thigh": "shin", "shin": "foot"}
         self._targets = {}
+        self.arm_len = self._length("upper_arm", "L") + self._length("forearm", "L")
+        self.shoulder_z = self.head["upper_arm.L"].z
+        if os.environ.get("CLIP_DEBUG"):
+            print(f"RIGMASS arm {self.arm_len:.4f} shoulder_z {self.shoulder_z:.4f} hips_z {self.head['hips'].z:.4f}")
 
     def _dir(self, bone, side):
         child = self.child[bone]
@@ -320,9 +339,28 @@ class ClipRig:
         el, az = math.radians(ch["bat_el"]), math.radians(ch["bat_az"])
         forward, toward, up = Vector((0.0, -1.0, 0.0)), Vector((near_x, 0.0, 0.0)), Vector((0.0, 0.0, 1.0))
         direction = forward * (math.cos(az) * math.cos(el)) + toward * (math.sin(az) * math.cos(el)) + up * math.sin(el)
-        fist = (forward * ch["grip_f"] + toward * ch["grip_n"] + up * ch["grip_u"]) / PX_PER_M
+        # Die Griffpunkte sind für Bruce gemessen; andere Figuren greifen im gleichen Verhältnis zu Armlänge und Schulterhöhe
+        reach, height = min(self.arm_len / BRUCE_ARM, 1.0), self.shoulder_z / BRUCE_SHOULDER_Z
+        fist = (forward * ch["grip_f"] * reach + toward * ch["grip_n"] * reach + up * ch["grip_u"] * height) / PX_PER_M
         top = fist - direction * HAND_EXTRA
         return top, top - direction * ch["grip_gap"], direction
+
+    def _fit_grip(self, top, low, shoulder_top, shoulder_low, near, far):
+        """Reicht ein Arm nicht bis zum Griff (breite Schultern, kurze Arme), rückt der Schläger als Ganzes etwas näher an den Körper."""
+        top, low = top.copy(), low.copy()
+        reach_top = (self._length("upper_arm", near) + self._length("forearm", near)) * 0.998
+        reach_low = (self._length("upper_arm", far) + self._length("forearm", far)) * 0.998
+        for _ in range(24):
+            shift = Vector()
+            for wrist, shoulder, reach in ((top, shoulder_top, reach_top), (low, shoulder_low, reach_low)):
+                d = wrist - shoulder
+                if d.length > reach:
+                    shift -= d.normalized() * (d.length - reach)
+            if shift.length < 1e-5:
+                break
+            top += shift * 0.7
+            low += shift * 0.7
+        return top, low
 
     def _bat_arm(self, side, wrist, direction, r_chest, shoulder, pole):
         a, b = self._length("upper_arm", side), self._length("forearm", side)
@@ -361,8 +399,11 @@ class ClipRig:
         if bat:
             chest_pos = hips_pos + r_hips @ (self.head["spine"] - self.head["hips"]) + r_spine @ (self.head["chest"] - self.head["spine"])
             top, low, direction = self.bat_wrists(ch, near)
+            shoulders = {s: chest_pos + r_chest @ (self.head[f"upper_arm.{s}"] - self.head["chest"]) for s in (near, far)}
+            top, low = self._fit_grip(top, low, shoulders[near], shoulders[far], near, far)
+            self.last_targets = (top, low)
             for side, wrist in ((near, top), (far, low)):
-                shoulder = chest_pos + r_chest @ (self.head[f"upper_arm.{side}"] - self.head["chest"])
+                shoulder = shoulders[side]
                 pole = Vector(((1.0 if side == "L" else -1.0) * 0.35, 0.0, -1.0))
                 out.update(self._bat_arm(side, wrist, direction, r_chest, shoulder, pole))
         else:
@@ -385,7 +426,7 @@ class ClipRig:
         return out
 
 
-def bake_clips(arm):
+def bake_clips(arm, ids=None):
     """Legt jeden Clip für beide Blickrichtungen als Action an. Gibt zurück (Meter): den grössten Fehler der stehenden
     Füsse, wie tief ein Fuss höchstens in den Boden taucht und wie weit eine Hand höchstens neben dem Griff liegt."""
     sc = bpy.context.scene
@@ -398,7 +439,8 @@ def bake_clips(arm):
     for pb in bones:
         pb.rotation_mode = "QUATERNION"
     worst, dip, reach = 0.0, 0.0, 0.0
-    for clip_id, clip in CLIPS.items():
+    for clip_id in (ids if ids is not None else CLIPS):
+        clip = CLIPS[clip_id]
         for near in ("R", "L"):
             action = bpy.data.actions.new(f"{clip_id}_{near}")
             action.use_fake_user = True
@@ -460,7 +502,8 @@ def _check_hands(arm, rig, clip, near):
         frame = t * FPS
         bpy.context.scene.frame_set(int(frame), subframe=frame - int(frame))
         bpy.context.view_layer.update()
-        top, low, _ = rig.bat_wrists(channels_at(clip, t), near)
+        rig.solve(channels_at(clip, t), near, True)
+        top, low = rig.last_targets
         worst = max(worst, (arm.pose.bones[f"hand.{near}"].head - top).length, (arm.pose.bones[f"hand.{far}"].head - low).length)
     return worst
 

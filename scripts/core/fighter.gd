@@ -39,6 +39,7 @@ const BLOCK_PUSH := 0.35        # Anteil des Rückstosses, der trotz Abwehr anko
 
 var skin: Dictionary = Skins.KAI
 var fighter_id: StringName = &""   # gewählter Kämpfer (`FighterData`); leer = nur 2D-Figur
+var weapons_only := false          # Gegner heben nur Waffen auf, keine Kisten
 var damage_factor := 1.0           # Werte des Kämpfers, siehe `FighterData`
 var attack_speed := 1.0
 var reach_factor := 1.0

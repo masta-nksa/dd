@@ -1559,11 +1559,12 @@ def main():
         bpy.context.preferences.filepaths.save_version = 0     # keine .blend1 neben die Modelle
         b = build_figure(name)
         add_reference_planes(args.front, args.side, ALL_FIGHTERS[name]["hip_z"] * 2)
-        if name in fighter_clips.CLIP_FIGHTERS:
-            slip, dip, reach = fighter_clips.bake_clips(b.armature)
+        clip_ids = fighter_clips.clip_ids(name)
+        if clip_ids:
+            slip, dip, reach = fighter_clips.bake_clips(b.armature, clip_ids)
             print(f"{name}: {len(bpy.data.actions)} Clips, stehende Füsse rutschen {slip * 1000:.2f} mm, "
                   f"Füsse tauchen {dip * 1000:.1f} mm in den Boden, Hände liegen {reach * 1000:.1f} mm neben dem Griff")
-            if slip > 0.005 or dip > 0.02 or reach > 0.025:
+            if slip > 0.005 or dip > 0.02 or reach > float(os.environ.get("CLIP_REACH_TOL", "0.025")):
                 raise RuntimeError(f"{name}: Clip-Fehler, Fuss rutscht {slip:.4f} m, im Boden {dip:.4f} m, Griff {reach:.4f} m")
 
         if not args.no_blend:
@@ -1575,7 +1576,7 @@ def main():
             os.makedirs(args.preview_dir, exist_ok=True)
             preview_figure(name, b, args.preview_dir)
 
-        if args.clip_preview is not None and name in fighter_clips.CLIP_FIGHTERS:
+        if args.clip_preview is not None and fighter_clips.clip_ids(name):
             os.makedirs(args.preview_dir, exist_ok=True)
             preview_clips(name, b, args.preview_dir, args.clip_preview)
 

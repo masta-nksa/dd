@@ -5,8 +5,9 @@ extends Fighter
 ##   LURK = kurz stehen, dann Ziel suchen     CHASE = zum Ziel laufen, in Position gehen
 ##   ATTACK = Angriff läuft                   RETREAT = nach dem Angriff Abstand nehmen
 ##   HURT = Körper wehrlos, KI denkt nicht    DEAD
+##   FETCH = zu einem Baseballschläger am Boden laufen und ihn aufheben (danach Angriffe mit dem Schläger)
 
-enum Ai { LURK, CHASE, ATTACK, RETREAT, HURT, DEAD }
+enum Ai { LURK, CHASE, ATTACK, RETREAT, HURT, DEAD, FETCH }
 
 const TYPES := {
 	&"thug": {"skin": Skins.THUG, "hp": 36, "scale": 1.0, "speed": Vector2(118, 78),
@@ -22,6 +23,11 @@ const TYPES := {
 		"weight": 1.5, "points": 5000, "attacks": [[&"g_schlag", 3], [&"g_tritt", 2], [&"g_hammer", 1]], "reach": 52.0,
 		"pause": Vector2(0.35, 0.95), "combo": 0.5, "ram": true},
 }
+
+const FETCH_RANGE := Vector2(300.0, 90.0)   # so weit sucht ein Gegner nach einem Schläger
+const FETCH_GIVE_UP := 3.5                  # Sekunden, dann lässt er ihn liegen
+const ARMED_REACH := 62.0                   # Abstand, aus dem er mit dem Schläger zuschlägt (Pixel bei Grösse 1)
+const ARMED_ATTACKS := [[&"w_bat1", 3], [&"w_homerun", 1]]
 
 var type_id: StringName = &"thug"
 var data: Dictionary
@@ -42,6 +48,8 @@ var _reaction := randf_range(0.3, 0.7)
 var _wait_offset := randf_range(-50.0, 50.0)
 var _retreat_dir := Vector2.ZERO
 var _retreat_time := 0.5
+var _fetch_target: WeaponPickup = null
+var _fetch_check := randf_range(0.2, 1.0)
 
 ## look_index < 0 würfelt eine Variante aus `EnemyLooks`; Tests können eine feste wählen.
 static func create(type: StringName, look_index := -1) -> Enemy:
@@ -61,6 +69,7 @@ static func create(type: StringName, look_index := -1) -> Enemy:
 	e.points = e.data["points"]
 	e.reach_px = e.data["reach"] * e.body_scale
 	e.lock_facing = true
+	e.weapons_only = true
 	return e
 
 func _physics_process(delta: float) -> void:
@@ -89,6 +98,7 @@ func _think(delta: float) -> void:
 	_think_pause -= delta
 	_attack_pause -= delta
 	_ram_pause -= delta
+	_fetch_check -= delta
 
 	if current_health <= 0 or state == State.DEAD:
 		ai = Ai.DEAD
@@ -108,10 +118,13 @@ func _think(delta: float) -> void:
 		Ai.ATTACK: _ai_attack_done()
 		Ai.RETREAT: _ai_retreat()
 		Ai.HURT: _ai_recovered()
+		Ai.FETCH: _ai_fetch()
 
 func _ai_lurk() -> void:
 	move_input = Vector2.ZERO
 	if ai_time < _reaction:
+		return
+	if _look_for_weapon():
 		return
 	target = _choose_target()
 	if target != null:
@@ -131,12 +144,14 @@ func _ai_chase() -> void:
 	if target == null:
 		_set_ai(Ai.LURK)
 		return
+	if _look_for_weapon():
+		return
 	var dx := target.pos_x - pos_x
 	var dz := target.pos_z - pos_z
 	var goal_x: float
 	var goal_z: float
 	if may_attack:
-		goal_x = target.pos_x + side * reach_px * 0.85
+		goal_x = target.pos_x + side * _reach() * 0.85
 		goal_z = target.pos_z
 	else:
 		# warten: mit Abstand daneben stehen und langsam kreisen
@@ -156,11 +171,49 @@ func _ai_chase() -> void:
 		_ram_pause = randf_range(4.0, 7.0)
 		_begin_attack(&"g_rammen")
 		return
-	var in_range := absf(dx) > reach_px * 0.45 and absf(dx) < reach_px * 1.2 and absf(dz) < 12.0
+	var reach := _reach()
+	var in_range := absf(dx) > reach * 0.45 and absf(dx) < reach * 1.2 and absf(dz) < 12.0
 	if in_range and _attack_pause <= 0.0:
 		_begin_attack(_pick_attack())
 		if randf() < data["combo"]:
 			request_attack(&"punch")   # versucht die Kette, falls der erste Schlag sitzt
+
+## Mit Schläger in der Hand schlägt der Gegner aus grösserer Entfernung zu.
+func _armed() -> bool:
+	return carried != null and not carried.heavy
+
+func _reach() -> float:
+	return maxf(reach_px, ARMED_REACH * body_scale) if _armed() else reach_px
+
+## Liegt ein Schläger in der Nähe und kein Spieler ist näher dran, holt ihn der Gegner (ohne Waffe, ab und zu geprüft).
+func _look_for_weapon() -> bool:
+	if _armed() or _fetch_check > 0.0 or director.items == null:
+		return false
+	_fetch_check = randf_range(0.6, 1.2)
+	var w := director.items.find_weapon_for_enemy(self, FETCH_RANGE)
+	if w == null or w.pos_x < director.screen_left() + 20.0 or w.pos_x > director.screen_right() - 20.0:
+		return false
+	_fetch_target = w
+	_set_ai(Ai.FETCH)
+	return true
+
+func _ai_fetch() -> void:
+	var w := _fetch_target
+	if _armed() or w == null or not is_instance_valid(w) or not director.items.weapons.has(w) or ai_time > FETCH_GIVE_UP:
+		_fetch_target = null
+		_set_ai(Ai.CHASE)
+		return
+	var dx := w.pos_x - pos_x
+	var dz := w.pos_z - pos_z
+	if absf(dx) < WorldItems.GRAB_REACH.x * 0.8 and absf(dz) < WorldItems.GRAB_REACH.y * 0.8:
+		move_input = Vector2.ZERO
+		request_grab()
+		_fetch_target = null
+		_set_ai(Ai.LURK)
+		return
+	_walk_to(w.pos_x, _detour(w.pos_x, w.pos_z), false)
+	if dx != 0.0:
+		facing = 1 if dx > 0.0 else -1
 
 func _begin_attack(id: StringName) -> void:
 	move_input = Vector2.ZERO
@@ -242,12 +295,13 @@ func _choose_target() -> Fighter:
 	return best
 
 func _pick_attack() -> StringName:
+	var table: Array = ARMED_ATTACKS if _armed() else data["attacks"]
 	var total := 0
-	for entry in data["attacks"]:
+	for entry in table:
 		total += entry[1]
 	var r := randi_range(1, total)
-	for entry in data["attacks"]:
+	for entry in table:
 		r -= entry[1]
 		if r <= 0:
 			return entry[0]
-	return data["attacks"][0][0]
+	return table[0][0]

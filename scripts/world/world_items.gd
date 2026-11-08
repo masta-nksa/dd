@@ -128,6 +128,25 @@ func _loot_for(kind: StringName) -> StringName:
 # ------------------------------------------------------------ Greifen
 
 ## Was liegt in Reichweite und passt zur Greifen-Taste? Mit einer Kiste in den Händen: nichts.
+## Die nächste Waffe am Boden, die ein Gegner holen will: im Bildbereich `range`, und kein Spieler liegt näher dran.
+func find_weapon_for_enemy(f: Fighter, range: Vector2) -> WeaponPickup:
+	var best: WeaponPickup = null
+	var best_cost := INF
+	for w in weapons:
+		if not is_instance_valid(w) or w.pos_y > 30.0:
+			continue
+		var cost := absf(w.pos_x - f.pos_x) + 2.0 * absf(w.pos_z - f.pos_z)
+		if absf(w.pos_x - f.pos_x) > range.x or absf(w.pos_z - f.pos_z) > range.y or cost >= best_cost:
+			continue
+		var contested := false
+		for p in players:
+			if p.current_health > 0 and absf(w.pos_x - p.pos_x) + 2.0 * absf(w.pos_z - p.pos_z) < cost:
+				contested = true
+		if not contested:
+			best = w
+			best_cost = cost
+	return best
+
 func find_grabbable(f: Fighter) -> Node2D:
 	if (f.carried != null and f.carried.heavy) or f.pos_y > 10.0:
 		return null
@@ -139,7 +158,7 @@ func find_grabbable(f: Fighter) -> Node2D:
 		if dx < GRAB_REACH.x and dz < GRAB_REACH.y and w.pos_y < 30.0 and dx + 2.0 * dz < best_cost:
 			best = w
 			best_cost = dx + 2.0 * dz
-	if f.carried == null:
+	if f.carried == null and not f.weapons_only:
 		for p in props:
 			if not p.grabbable or p.in_hands:
 				continue

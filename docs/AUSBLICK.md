@@ -1,6 +1,6 @@
 # Doppelfaust (Godot) – Ausblick
 
-Stand: 2026-11-04. Stufen 1–11 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe11_test.gd`, dazu `grafik_test.gd`).
+Stand: 2026-11-08. Stufen 1–12 fertig und headless getestet (`tests/stufe2_test.gd` bis `stufe12_test.gd`, dazu `grafik_test.gd`).
 Start: `godot --headless --fixed-fps 3000 --disable-vsync -s tests/stufe4_test.gd` (ohne `--fixed-fps` läuft er in Echtzeit, ~10 min).
 Balance-Messung: Parameter `-- normal` (Bot ist sterblich). Online unter https://masta-nksa.github.io/dd/ (Pages-Quelle «GitHub Actions», Workflow `Online stellen` bei jedem Push auf `main`).
 Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scenes/main.tscn`.
@@ -26,6 +26,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 9. Baseballschläger: 3D-Modell in echter Länge, Schwünge mit beiden Händen (bisher nur Bruce), Abwehr und Konter
 10. Gegner als 3D-Modelle mit zufälligen Varianten (Schritt 1 des Gegner-Konzepts; Stilpakete, neue Typen und Bossphasen folgen)
 11. Nachschub statt Wellen, stärkere Gegner, zweites Level (Chinatown)
+12. Schläger-Clips für alle Figuren, Gegner holen und schwingen den Schläger
 
 ## Stufe 4 (Gegner) – Aufbau
 - `scripts/enemies/enemy.gd` (`Enemy extends Fighter`): KI-Zustände LURK, CHASE, ATTACK, RETREAT, HURT, DEAD; vier Typen
@@ -106,7 +107,7 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Werte: Reichweite 72 px statt 78–82 px, Anlauf 0,13 / 0,15 / 0,22 s, Schaden und Haltbarkeit wie bisher.
 - Abwehr: `Fighter.State.BLOCK`. Mit Schläger hebt die Low-Kick-Taste (G / L / B) ihn hoch, solange sie gehalten wird (`block_held`); man steht still. `try_block` wehrt Angriffe von vorn ohne Schaden und Trefferstarre ab und kostet 1 Haltbarkeit. In den ersten 0,15 s wird daraus ein Konter: Der Angreifer taumelt 0,7 s (`stagger`). Von hinten trifft es weiter. Abgewehrte Angriffe zählen nicht als Treffer (`HitBox.blocked_targets`), Gegner-Ketten laufen dann nicht weiter.
 - Tests: `stufe9_test.gd`. Vorschau: `... -- --fighter bruce --clip-preview w_bat1 w_bat2 w_homerun w_block`.
-- Figuren ohne Clips halten den Schläger mit einer Hand und zeigen die Posen `swing`, `homerun`, `block`.
+- Figuren ohne Schläger-Clips (nur noch Modelle, die ohne `.glb` laufen) halten den Schläger mit einer Hand und zeigen die Posen `swing`, `homerun`, `block`. Seit Stufe 12 haben alle Modelle die Schläger-Clips.
 - Online geprüft (2026-11-03): Im Browser liegt der Schläger nach der ersten Kiste am Boden, lässt sich aufheben, sitzt als 3D-Modell in der Hand, das HUD zeigt ihn samt Abwehr-Hinweis, Abwehr heben und senken läuft, keine Konsolenfehler. Der Schwung selbst nur in der lokalen Aufnahme gesehen. Nicht geprüft: Balance mit Abwehr und kürzerer Reichweite, echtes Gamepad, Bildrate im sichtbaren Browserfenster. Beute landet am selben Punkt wie der Schläger und kann ihn kurz verdecken.
 
 ## Stufe 10 (Gegner als 3D-Modelle) – Aufbau
@@ -127,12 +128,21 @@ Startszene ist `scenes/app.tscn`; Tests der reinen Spielszene laden weiter `scen
 - Levelwechsel in `Main._on_level_cleared`/`_start_level`: «LEVEL GESCHAFFT!», nach 3 s Start von Level 2 mit Punkten und Leben, vollen Lebenspunkten, ausgeschiedene Spieler steigen wieder ein. Sieg erst nach dem zweiten Boss; `Main.level_count` (Tests setzen 1) bestimmt die Zahl der Level.
 - Tests: `stufe11_test.gd` (Nachschub, Stärke, Boss, Levelwechsel, ganzer Bot-Lauf durch beide Level in rund 350 Spielsekunden). Die Bots der Stufen 4 und 7 laufen mit einem Level.
 
+## Stufe 12 (Schläger für alle, Gegner mit Schläger) – Aufbau
+- Schläger-Clips für alle: `BAT_CLIP_FIGHTERS` in `tools/blender/fighter_clips.py` (die sieben übrigen Kämpfer und alle sieben Gegnermodelle); `clip_ids(name)` liefert je Figur alle Clips (Bruce), nur `w_bat1`, `w_bat2`, `w_homerun`, `w_block` oder keine. Die anderen Kampf-Clips bleiben bei Bruce, alle übrigen Angriffe bei den `Poses`.
+- Die Griffpunkte sind für Bruce gemessen (Arm 0,47 m, Schulter 1,36 m). Andere Figuren greifen im Verhältnis zur Armlänge (nur verkürzend) und Schulterhöhe; reicht ein Arm trotzdem nicht (breite Schultern: JCVD, Bruno, Brocken, Boss), rückt `_fit_grip` den Schläger als Ganzes näher an den Körper. Der Bau prüft weiter, dass beide Hände am Griff liegen (0,0 mm bei allen 15 Modellen; Toleranz 2,5 cm, per `CLIP_REACH_TOL` änderbar). `CLIP_DEBUG=1` zeigt die Körpermasse.
+- Gegner mit Schläger: `Enemy` hat den Zustand `FETCH`. Ohne Waffe prüft er alle 0,6–1,2 s `WorldItems.find_weapon_for_enemy`: ein Schläger im Bild, höchstens 300 px weit und 90 px tief, und kein lebender Spieler liegt näher dran (Spieler gehen vor). Er läuft hin (mit `_detour` um Hindernisse), hebt ihn per `request_grab` auf und gibt nach 3,5 s auf. Gegner heben nur Waffen auf, keine Kisten (`Fighter.weapons_only`).
+- Bewaffnet wählt er nur `w_bat1` (3) und `w_homerun` (1), die Kette `w_bat1` → `w_bat2` läuft wie beim Combo-Wurf der Gegner, und er schlägt aus 62 px (statt 44–58 px) zu. Schaden und Pausen kommen wie bei allen Gegnern aus den Faktoren des Levels. Treffer nutzen den Schläger ab, am Ende «KAPUTT!»; fällt der Gegner, bleibt der Schläger blinkend liegen (wie bei Spielern).
+- Tests: `stufe12_test.gd` (Holen, Spieler gehen vor, keine Kisten, Schläger-Angriffe und Reichweite, Treffer und Abnutzung, Fallenlassen, Schläger-Clips in allen 15 Modellen samt Faust nach vorn). Von Hand zu prüfen: wie der Schwung der anderen Figuren aussieht, und wie oft Gegner den Schläger holen (Balance).
+- Vorschau: `... -- --fighter mika --clip-preview w_bat2` (geht jetzt für jede Figur mit Schläger-Clips).
+
 ## Online-Koop (später, eigener Konzeptvorschlag nötig)
 - Node.js-WebSocket-Relay auf Fly.io; Räume mit Code; Godot `WebSocketMultiplayerPeer` + `@rpc`.
 - Host-autoritativ: ein Client simuliert die Welt, der andere sendet Eingaben; Client-Prediction nur für die eigene Figur, getrennt vom Spielzustand.
 - Offene Fragen: Latenz-Toleranz, Wiederverbinden, Spielerzahl (nur 2?).
 
 ## Nächste Schritte
+- Nächste Waffen (Wunsch des Users, 2026-11-08): Wurfsterne und Nunchakus. Vor dem Bauen Konzept als Liste (Modelle, Clips, Greifen, Haltbarkeit, Gegner, Balance).
 - Browser-Prüfung der Online-Fassung mit den Modellen (nach dem ersten Lauf des Workflows `Online stellen`).
 - Balance der acht Figuren messen, Werte von Bruce, Chuck, Jackie, JCVD mit dem User abstimmen.
 - Gegner-Konzept, Schritt 2 und 3: Stilpakete (Raufer, Treter, Schwergewicht, Stecher, Karateka, Akrobat) für Gegner und Kämpfer, dann die vier neuen Typen Messerkerl, Wächter, Werfer, Springer, Bosswutstufen und Elite-Gegner. Danach Clips (auch Schläger) für die übrigen sieben Kämpfer.
