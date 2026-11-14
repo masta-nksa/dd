@@ -16,6 +16,9 @@ const PX_PER_M := 52.8            # Spielpixel pro Meter: FigureArt ist 95 px f�
 const HAND_EXTRA := 0.07          # vom Handgelenk bis zur Mitte der Faust
 const BLEND_FRAMES := 5           # so viele gezeichnete Bilder dauert der Übergang von und zu einem Clip
 const AIR_CLIPS: Array[StringName] = [&"jump_kick"]   # ohne stehenden Fuss: hier gilt der tiefste Fuss als Boden
+const STAGE_COLS := 4             # gemeinsame Bühne der Gegner: so viele Felder nebeneinander ...
+const STAGE_ROWS := 4             # ... und übereinander (ein Renderdurchgang für alle)
+const STAGE_GAP := 1.25           # Feldabstand im Verhältnis zum Bildausschnitt, damit Gliedmassen nicht ins Nachbarfeld ragen
 const BAT_PATH := "res://assets/characters/weapon_bat.glb"
 const BAT_TIP := 0.668            # von der vorderen Faust bis zur Spitze des Schlägers (Meter, `BAT_PROFILE` im Blender-Skript)
 
@@ -23,10 +26,57 @@ const BAT_TIP := 0.668            # von der vorderen Faust bis zur Spitze des Sc
 static var force := false
 static var active_count := 0      # wie viele Modelle gerade gezeichnet werden (für die F2-Anzeige)
 
+## Gemeinsame 3D-Welt aller Gegner: ein `SubViewport`, ein Renderdurchgang. Jede Figur hat ein Feld (Slot) darin.
+class Stage extends SubViewport:
+	var free_slots: Array[int] = []
+	var pitch_m := VIEW_METERS * STAGE_GAP
+	var pitch_px := int(LITE_VIEW_SIZE * STAGE_GAP)
+
+	func _init() -> void:
+		size = Vector2i(STAGE_COLS * pitch_px, STAGE_ROWS * pitch_px)
+		transparent_bg = true
+		own_world_3d = true
+		msaa_3d = Viewport.MSAA_DISABLED
+		render_target_update_mode = SubViewport.UPDATE_DISABLED
+		var camera := Camera3D.new()
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+		camera.size = STAGE_ROWS * pitch_m
+		camera.position = Vector3(STAGE_COLS * pitch_m * 0.5, STAGE_ROWS * pitch_m * 0.5, 5.0)
+		var env := Environment.new()
+		env.background_mode = Environment.BG_CLEAR_COLOR
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color.WHITE
+		env.ambient_light_energy = 0.6
+		camera.environment = env
+		add_child(camera)
+		var sun := DirectionalLight3D.new()
+		sun.rotation_degrees = Vector3(-42.0, 22.0, 0.0)
+		sun.light_energy = 1.1
+		add_child(sun)
+		for i in range(STAGE_COLS * STAGE_ROWS - 1, -1, -1):
+			free_slots.append(i)
+
+	## Fusspunkt der Figur im Feld `slot` (Weltkoordinaten, Meter).
+	func slot_origin(slot: int) -> Vector3:
+		var cx := (slot % STAGE_COLS + 0.5) * pitch_m
+		var cy := (STAGE_ROWS - slot / STAGE_COLS - 0.5) * pitch_m
+		return Vector3(cx, cy - (VIEW_METERS * 0.5 - FEET_MARGIN), 0.0)
+
+	## Ausschnitt des Felds im Bild der Bühne (Pixel).
+	func slot_rect(slot: int) -> Rect2:
+		var centre := Vector2((slot % STAGE_COLS + 0.5) * pitch_px, (slot / STAGE_COLS + 0.5) * pitch_px)
+		return Rect2(centre - Vector2.ONE * LITE_VIEW_SIZE * 0.5, Vector2.ONE * LITE_VIEW_SIZE)
+
+static var _stages: Array[Stage] = []
+static var _flash_overlay: StandardMaterial3D = null
+
 var fighter_id: StringName
 var skeleton: Skeleton3D
 
-var _viewport: SubViewport
+var _viewport: SubViewport    # eigenes Teilbild (Spieler) oder die gemeinsame Bühne der Gegner (`_stage`)
+var _stage: Stage = null      # nur bei Gegnern
+var _slot := -1
+var _slot_origin := Vector3.ZERO   # Fusspunkt im Teilbild; auf der Bühne je Feld verschoben
 var lite := false             # Gegner: kleineres Teilbild, nur jedes zweite Bild neu gerechnet
 var _view_size := VIEW_SIZE
 var _outer: Node3D            # Versatz in Bildschirmrichtung (Fallen)
@@ -83,32 +133,28 @@ func _build(id: StringName, instance: Node) -> bool:
 	if skeleton == null or skeleton.find_bone("hips") < 0:
 		instance.free()
 		return false
-	_viewport = SubViewport.new()
-	_viewport.size = Vector2i(_view_size, _view_size)
-	_viewport.transparent_bg = true
-	_viewport.own_world_3d = true
-	_viewport.msaa_3d = Viewport.MSAA_DISABLED if lite else Viewport.MSAA_4X   # Gegner ohne Glättung: im Browser kostet jede Mehrfach-Abtastung je Teilbild viel
-	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if lite else SubViewport.UPDATE_ALWAYS
-	add_child(_viewport)
+	if lite:
+		_stage = _stage_with_room()
+		_slot = _stage.free_slots.pop_back()
+		_slot_origin = _stage.slot_origin(_slot)
+		_viewport = _stage
+	else:
+		_viewport = SubViewport.new()
+		_viewport.size = Vector2i(_view_size, _view_size)
+		_viewport.transparent_bg = true
+		_viewport.own_world_3d = true
+		_viewport.msaa_3d = Viewport.MSAA_4X
+		_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		add_child(_viewport)
 	_outer = Node3D.new()
+	_outer.position = _slot_origin
 	_pivot = Node3D.new()
 	_model = instance as Node3D
 	_viewport.add_child(_outer)
 	_outer.add_child(_pivot)
 	_pivot.add_child(_model)
-	var camera := Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = VIEW_METERS
-	camera.position = Vector3(0.0, VIEW_METERS * 0.5 - FEET_MARGIN, 5.0)
-	_environment = Environment.new()
-	_environment.background_mode = Environment.BG_CLEAR_COLOR
-	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	_environment.ambient_light_color = Color.WHITE
-	camera.environment = _environment
-	_viewport.add_child(camera)
-	_sun = DirectionalLight3D.new()
-	_sun.rotation_degrees = Vector3(-42.0, 22.0, 0.0)
-	_viewport.add_child(_sun)
+	if _stage == null:
+		_build_own_camera()
 	_set_flash(false)
 	skeleton.reset_bone_poses()
 	for i in skeleton.get_bone_count():
@@ -124,6 +170,31 @@ func _build(id: StringName, instance: Node) -> bool:
 		skeleton.add_child(_bat)
 		_bat_cracks = _bat.find_child("BatCracks", true, false)
 	return true
+
+func _build_own_camera() -> void:
+	var camera := Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = VIEW_METERS
+	camera.position = Vector3(0.0, VIEW_METERS * 0.5 - FEET_MARGIN, 5.0)
+	_environment = Environment.new()
+	_environment.background_mode = Environment.BG_CLEAR_COLOR
+	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	_environment.ambient_light_color = Color.WHITE
+	camera.environment = _environment
+	_viewport.add_child(camera)
+	_sun = DirectionalLight3D.new()
+	_sun.rotation_degrees = Vector3(-42.0, 22.0, 0.0)
+	_viewport.add_child(_sun)
+
+## Eine Bühne mit freiem Feld; eine neue wird erst gebaut, wenn alle voll sind.
+static func _stage_with_room() -> Stage:
+	for stage in _stages:
+		if is_instance_valid(stage) and not stage.free_slots.is_empty():
+			return stage
+	var fresh := Stage.new()
+	_stages.append(fresh)
+	(Engine.get_main_loop() as SceneTree).root.add_child.call_deferred(fresh)
+	return fresh
 
 ## Merkt sich die Spuren der Clips im Modell. Abgespielt wird nicht mit dem `AnimationPlayer`: Die Zeit bestimmt der Angriff.
 func _load_clips(root: Node) -> void:
@@ -164,8 +235,22 @@ func _find_skeleton(node: Node) -> Skeleton3D:
 
 func _set_flash(on: bool) -> void:
 	_flash = on
+	if _stage != null:   # gemeinsames Licht: Treffer-Blitz als weisse Überlagerung statt als helleres Licht
+		if _flash_overlay == null:
+			_flash_overlay = StandardMaterial3D.new()
+			_flash_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_flash_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			_flash_overlay.albedo_color = Color(1.0, 1.0, 1.0, 0.8)
+		_overlay(_model, _flash_overlay if on else null)
+		return
 	_environment.ambient_light_energy = 9.0 if on else 0.6
 	_sun.light_energy = 4.0 if on else 1.1
+
+func _overlay(node: Node, material: Material) -> void:
+	if node is MeshInstance3D:
+		(node as MeshInstance3D).material_overlay = material
+	for child in node.get_children():
+		_overlay(child, material)
 
 # ---------------------------------------------------------------- Haltung
 
@@ -195,7 +280,7 @@ func set_pose(pose: Dictionary, facing: int, flash := false) -> void:
 	var turn_rad := deg_to_rad(turn)
 	_model.rotation.y = dir * PI * 0.5
 	_pivot.rotation.z = -dir * turn_rad
-	_outer.position = Vector3(dir * -sin(turn_rad) * 40.0 / PX_PER_M, absf(sin(turn_rad)) * 7.0 / PX_PER_M, 0.0)
+	_outer.position = _slot_origin + Vector3(dir * -sin(turn_rad) * 40.0 / PX_PER_M, absf(sin(turn_rad)) * 7.0 / PX_PER_M, 0.0)
 	# Steht die Figur, kommt der tiefste Fuss genau auf den Boden
 	_model.position.y = 0.0 if absf(turn) >= 1.0 else -(_lowest_foot() - _rest_foot_y)
 	_blend_from_last(&"pose", dir)
@@ -220,7 +305,7 @@ func set_clip(id: StringName, phase: float, facing: int, flash := false) -> void
 		skeleton.set_bone_pose_position(skeleton.find_bone("hips"), anim.position_track_interpolate(entry["hips"], phase))
 	_model.rotation.y = facing * PI * 0.5
 	_pivot.rotation.z = 0.0
-	_outer.position = Vector3.ZERO
+	_outer.position = _slot_origin
 	_model.position.y = -(_lowest_foot() - _rest_foot_y) if id in AIR_CLIPS else 0.0
 	_blend_from_last(id, facing)
 	_update_bat()
@@ -234,6 +319,9 @@ func set_active(on: bool) -> void:
 		return
 	_active = on
 	active_count += 1 if on else -1
+	if _stage != null:   # die Bühne rechnet auf Anforderung (`update_due`), hier wird nur die Figur ein- oder ausgeblendet
+		_outer.visible = on
+		return
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on and not lite else SubViewport.UPDATE_DISABLED
 
 ## Gegner rechnen ihr Teilbild nur jedes zweite Bild neu (verschoben nach Figur, damit nicht alle im selben Bild dran sind).
@@ -248,9 +336,16 @@ func update_due() -> bool:
 	return true
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_PREDELETE and _active:
-		active_count -= 1
-		_active = false
+	if what == NOTIFICATION_PREDELETE:
+		if _active:
+			active_count -= 1
+			_active = false
+		if _stage != null:
+			if is_instance_valid(_stage):
+				_stage.free_slots.append(_slot)
+				if is_instance_valid(_outer):
+					_outer.queue_free()
+			_stage = null
 
 ## Färbt die Zonen des Modells um: palette = {Zone: Farbe}, Zonen wie im Blender-Skript (`skin`, `hair`, `top`, `pants` ...).
 ## Jedes Modell bekommt eigene Kopien der Materialien, die geteilten Vorlagen bleiben unverändert. Eine neue Hautfarbe
@@ -381,7 +476,7 @@ func _view_point(bone: String) -> Vector3:
 	return _skeleton_view(skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin)
 
 func _skeleton_view(p: Vector3) -> Vector3:
-	return (_outer.transform * _pivot.transform * _model.transform) * _model_point(p)
+	return (Transform3D(Basis.IDENTITY, _outer.position - _slot_origin) * _pivot.transform * _model.transform) * _model_point(p)
 
 func _lowest_foot() -> float:
 	var lowest := INF
@@ -395,4 +490,8 @@ func _lowest_foot() -> float:
 func draw(ci: CanvasItem, x: float, y: float, k := 1.0) -> void:
 	var size := PX_PER_M * VIEW_METERS * k
 	var feet_v := PX_PER_M * (VIEW_METERS - FEET_MARGIN) * k
-	ci.draw_texture_rect(_viewport.get_texture(), Rect2(Vector2(x - size * 0.5, y - feet_v), Vector2(size, size)), false)
+	var target := Rect2(Vector2(x - size * 0.5, y - feet_v), Vector2(size, size))
+	if _stage != null:
+		ci.draw_texture_rect_region(_viewport.get_texture(), target, _stage.slot_rect(_slot))
+	else:
+		ci.draw_texture_rect(_viewport.get_texture(), target, false)
