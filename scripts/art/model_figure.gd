@@ -8,7 +8,8 @@ extends Node
 ## und der Aufrufer zeichnet weiter mit `FigureArt`.
 
 const VIEW_SIZE := 256            # Pixel des Teilbilds (doppelt aufgelöst, wird auf die halbe Grösse gezeichnet)
-const LITE_VIEW_SIZE := 160       # Gegner: kleineres Teilbild, 2-fach geglättet und nur jedes zweite Bild neu gerechnet (Browser-Leistung)
+const LITE_VIEW_SIZE := 160       # Gegner: kleineres Teilbild, ungeglättet und nur jedes zweite (bei vielen Figuren jedes dritte) Bild neu gerechnet (Browser-Leistung)
+const MANY_FIGURES := 6           # ab so vielen gezeichneten 3D-Figuren rechnen Gegner nur noch jedes dritte Bild
 const VIEW_METERS := 2.42         # sichtbare Höhe in Metern
 const FEET_MARGIN := 0.25         # Meter zwischen Fusspunkt und unterem Bildrand
 const PX_PER_M := 52.8            # Spielpixel pro Meter: FigureArt ist 95 px für 1,8 m gross
@@ -86,7 +87,7 @@ func _build(id: StringName, instance: Node) -> bool:
 	_viewport.size = Vector2i(_view_size, _view_size)
 	_viewport.transparent_bg = true
 	_viewport.own_world_3d = true
-	_viewport.msaa_3d = Viewport.MSAA_2X if lite else Viewport.MSAA_4X
+	_viewport.msaa_3d = Viewport.MSAA_DISABLED if lite else Viewport.MSAA_4X   # Gegner ohne Glättung: im Browser kostet jede Mehrfach-Abtastung je Teilbild viel
 	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if lite else SubViewport.UPDATE_ALWAYS
 	add_child(_viewport)
 	_outer = Node3D.new()
@@ -240,7 +241,8 @@ func set_active(on: bool) -> void:
 func update_due() -> bool:
 	if not lite:
 		return true
-	if (Engine.get_physics_frames() + get_instance_id()) % 2 != 0 and _source != &"":
+	var interval := 3 if active_count >= MANY_FIGURES else 2
+	if (Engine.get_physics_frames() + get_instance_id()) % interval != 0 and _source != &"":
 		return false
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	return true
